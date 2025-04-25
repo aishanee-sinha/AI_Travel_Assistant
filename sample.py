@@ -7,7 +7,7 @@ from amadeus_api import get_flight_prices_with_links, resolve_city_to_code
 from hotel_api import get_hotel_prices_with_links
 import google.generativeai as genai
 from dateutil import parser
-# GEMINI_API_KEY = "AIzaSyC9qbuTV7XGIanvYS-8Zd8wq5lHCzt0xMY"
+
 # Load environment variables
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
