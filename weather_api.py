@@ -71,7 +71,7 @@ if __name__ == "__main__":
     location = input("Enter location (e.g., 'San Jose, CA'): ")
     start_date_input = input("Enter start date (e.g., '15th May'): ")
     end_date_input = input("Enter end date (e.g., '20th May'): ")
-    api_key = "VFE2P34QYMZF8AWXQZN5TTMFK"  # Replace with your actual Visual Crossing API key
+    api_key = "HOTEL_API"  # Replace with your actual Visual Crossing API key
 
     # Check if the API key has been set correctly
     if api_key == "YOUR_API_KEY" or not api_key.strip():
