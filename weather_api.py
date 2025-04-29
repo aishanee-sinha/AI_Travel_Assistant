@@ -9,7 +9,6 @@ Original file is located at
 
 pip install dateparser
 
-"""VFE2P34QYMZF8AWXQZN5TTMFK"""
 
 import requests
 from datetime import datetime
