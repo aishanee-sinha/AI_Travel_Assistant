@@ -20,108 +20,220 @@ trip_context = {
     "return_date": "",
     "budget": "",
     "accommodation": "",
-    "interests": ""
+    "interests": "",
+    "duration": ""
 }
 
 # Set up Gemini model
-#model = genai.GenerativeModel("models/gemini-1.5-pro-latest")
 model = genai.GenerativeModel("models/gemini-1.5-flash-latest")
-
 chat = model.start_chat()
 
 def normalize_date(date_str):
+    """Use Gemini to normalize any date format into YYYY-MM-DD"""
     try:
-        return parser.parse(date_str).strftime('%Y-%m-%d')
+        prompt = (
+            "Convert this date to YYYY-MM-DD format. "
+            "If the year is not specified, use the current year. "
+            "If the date is ambiguous or invalid, return 'invalid'. "
+            "Return ONLY the date in YYYY-MM-DD format, nothing else. "
+            f"Date to normalize: {date_str}"
+        )
+        response = chat.send_message(prompt)
+        normalized_date = response.text.strip()
+        
+        # Validate the date format using datetime
+        try:
+            datetime.strptime(normalized_date, '%Y-%m-%d')
+            return normalized_date
+        except ValueError:
+            return "invalid"
+    except Exception as e:
+        print(f"Error normalizing date: {str(e)}")
+        return "invalid"
+
+def calculate_return_date(start_date, duration):
+    try:
+        start = parser.parse(start_date)
+        return (start + timedelta(days=int(duration))).strftime('%Y-%m-%d')
     except:
-        return date_str  # fallback if parsing fails
+        return ""
 
 def initialize_chat():
     instruction = (
         "You are a smart travel assistant. Help users plan trips with itineraries, "
         "suggest hotels and flights, and answer travel-related questions. "
         "Be friendly, detailed, and always respond helpfully."
+        "Your goal is to fill trip_context = {"
+        "origin: [city name]"
+        "destination: [city name]"
+        "departure_date: [date in YYYY-MM-DD format]"
+        "return_date: [date in YYYY-MM-DD format]"
+        "budget: [amount]"
+        "accommodation: [preference]"
+        "interests: [interests]"
+        "duration: [number only]"
+        "}"
+        "Keep the conversation going until the user is satisfied with the trip context."
     )
     chat.send_message(instruction)
 
-def chat_with_gemini(user_input):
+def generate_itinerary(destination, duration, interests=""):
+    prompt = (
+        f"Create a detailed {duration}-day itinerary for {destination}. "
+        f"Break it down day by day with morning, afternoon, and evening activities. "
+        f"Consider these interests: {interests}. "
+        "Include major attractions, local experiences, and dining recommendations."
+    )
+    response = chat.send_message(prompt)
+    return response.text
+
+def extract_trip_context(user_input):
+    # Initialize context with current values
+    context = trip_context.copy()
+    
+    # First, use Gemini to extract and normalize the date
+    date_prompt = (
+        "Given the current date and the user's message, determine the exact date they want to travel. "
+        "If they mention a relative date (like 'next Monday'), calculate the actual date. "
+        "If they mention a date without a year, use the current year. "
+        "Return ONLY the date in YYYY-MM-DD format, nothing else. "
+        f"Current date: {datetime.now().strftime('%Y-%m-%d')}\n"
+        f"User message: {user_input}"
+    )
+    
     try:
-        # Step 1: Extract or update fields from user input
+        date_response = chat.send_message(date_prompt)
+        departure_date = date_response.text.strip()
+        
+        # Validate the date
+        try:
+            # Check if the date is in the future
+            parsed_date = datetime.strptime(departure_date, '%Y-%m-%d')
+            if parsed_date < datetime.now():
+                # If the date is in the past, try next year
+                parsed_date = parsed_date.replace(year=parsed_date.year + 1)
+                departure_date = parsed_date.strftime('%Y-%m-%d')
+            
+            context["departure_date"] = departure_date
+        except ValueError:
+            print(f"Invalid date format from Gemini: {departure_date}")
+    
+        # Now extract other trip information
         extraction_prompt = (
-            "Update only the fields below based on the user's message. If something is not mentioned, leave it blank.\n"
+            "Extract the following information from the user's message. "
+            "If a field is not mentioned, leave it blank. "
             "Return the result in this format:\n"
-            "origin: ...\ndestination: ...\ndeparture_date: ...\nreturn_date: ...\n"
-            "budget: ...\naccommodation: ...\ninterests: ...\n\n"
+            "destination: [city name]\n"
+            "duration: [number only]\n"
+            "origin: [city name]\n"
+            "budget: [amount]\n"
+            "accommodation: [preference]\n"
+            "interests: [interests]\n\n"
             f"User message: {user_input}"
         )
+        
         extraction_response = chat.send_message(extraction_prompt)
         extracted = extraction_response.text.strip()
+        
+        # Parse the extracted information
+        for line in extracted.split('\n'):
+            if ':' in line:
+                key, value = line.split(':', 1)
+                key = key.strip().lower()
+                value = value.strip()
+                
+                if key in context and value:
+                    if key == 'duration':
+                        # Use Gemini to extract just the number
+                        duration_prompt = (
+                            "Extract just the number from this duration. "
+                            "Return ONLY the number, nothing else. "
+                            f"Duration: {value}"
+                        )
+                        duration_response = chat.send_message(duration_prompt)
+                        duration = duration_response.text.strip()
+                        if duration.isdigit():
+                            context[key] = duration
+                            # Calculate return date if we have departure date
+                            if context["departure_date"]:
+                                context["return_date"] = calculate_return_date(context["departure_date"], context["duration"])
+                    else:
+                        context[key] = value
+                        
+    except Exception as e:
+        print(f"Error in extraction: {str(e)}")
+    
+    return context
 
-        # Step 2: Update trip context based on Gemini extraction
+def chat_with_gemini(user_input):
+    try:
+        # Extract trip context from user input while maintaining previous context
+        extracted_context = extract_trip_context(user_input)
+        
+        # Update trip context with extracted values
         for key in trip_context:
-            match = re.search(fr"{key}:\s*(.+)", extracted, re.IGNORECASE)
-            if match and match.group(1).strip():
-                trip_context[key] = match.group(1).strip()
+            if extracted_context[key]:
+                trip_context[key] = extracted_context[key]
 
         print("\U0001F4E6 Current Trip Context:", trip_context)
 
-        # Step 3: If sufficient info, resolve city names to IATA codes and fetch flights, hotels
-        if all([trip_context["destination"], trip_context["departure_date"], trip_context["return_date"]]):
-            # origin_code = resolve_city_to_code(trip_context["origin"])
-            # destination_code = resolve_city_to_code(trip_context["destination"])
-            departure_date = normalize_date(trip_context["departure_date"])
-            return_date = normalize_date(trip_context["return_date"])
+        # Case 1: Only destination and duration provided
+        if trip_context["destination"] and trip_context["duration"] and not trip_context["departure_date"] and not trip_context["origin"]:
+            itinerary = generate_itinerary(trip_context["destination"], trip_context["duration"], trip_context["interests"])
+            return (
+                f"Here's your {trip_context['duration']}-day itinerary for {trip_context['destination']}:\n\n{itinerary}\n\n"
+                "Would you like flight and hotel options? Please provide your origin city and travel dates."
+            )
 
-            # print(f"\U0001F3AF Resolved codes: {trip_context['origin']} → {origin_code}, {trip_context['destination']} → {destination_code}")
-            # print(f"\U0001F4C5 Normalized departure date: {departure_date}")
-
-            # flights = get_flight_prices_with_links(
-            #     origin_code, destination_code, departure_date
-            # )
-
+        # Case 2: Destination, duration, and start date provided
+        if trip_context["destination"] and trip_context["duration"] and trip_context["departure_date"] and not trip_context["origin"]:
+            # Get hotel options
             hotels = get_hotel_prices_with_links(
                 trip_context["destination"],
-                departure_date,
-                return_date,
+                trip_context["departure_date"],
+                trip_context["return_date"],
             )
-            # Step 4: Generate a Gemini response with flight and hotel options
-            prompt = (
-                f"\nHere are hotel options in {trip_context['destination']}:\n\n" +
-                "\n".join(hotels) +
-                f"\n\nTraveler preferences: budget {trip_context['budget']}, "
-                f"interests: {trip_context['interests']}, preferred accommodation: {trip_context['accommodation']}.\n\n"
-                "Please list and compare these options, and include the booking link for each one."
+            
+            # Generate itinerary
+            itinerary = generate_itinerary(trip_context["destination"], trip_context["duration"], trip_context["interests"])
+            
+            return (
+                f"Here's your {trip_context['duration']}-day itinerary for {trip_context['destination']}:\n\n{itinerary}\n\n"
+                f"Hotel options in {trip_context['destination']} for {trip_context['departure_date']} to {trip_context['return_date']}:\n\n" + "\n".join(hotels) + "\n\n"
+                "Would you like flight options? Please provide your origin city."
             )
-            # If we have origin, destination, and date but no hotel info
-        elif all([trip_context["origin"], trip_context["destination"], trip_context["departure_date"]]):
-            # If we have origin, destination, and date but no hotel info
+
+        # Case 3: All information provided
+        if all([trip_context["origin"], trip_context["destination"], trip_context["departure_date"], trip_context["duration"]]):
+            # Get flight options
             origin_code = resolve_city_to_code(trip_context["origin"])
             destination_code = resolve_city_to_code(trip_context["destination"])
-            departure_date = normalize_date(trip_context["departure_date"])
-            print(f"\U0001F3AF Resolved codes: {trip_context['origin']} → {origin_code}, {trip_context['destination']} → {destination_code}")
-            print(f"\U0001F4C5 Normalized departure date: {departure_date}")
             flights = get_flight_prices_with_links(
-                origin_code, destination_code, departure_date
+                origin_code, destination_code, trip_context["departure_date"]
+            )
+            
+            # Get hotel options
+            hotels = get_hotel_prices_with_links(
+                trip_context["destination"],
+                trip_context["departure_date"],
+                trip_context["return_date"],
+            )
+            
+            # Generate itinerary
+            itinerary = generate_itinerary(trip_context["destination"], trip_context["duration"], trip_context["interests"])
+            
+            return (
+                f"Here's your complete travel plan for {trip_context['destination']}:\n\n"
+                f"Flight options from {trip_context['origin']} to {trip_context['destination']}:\n\n" + "\n".join(flights) + "\n\n"
+                f"Hotel options in {trip_context['destination']}:\n\n" + "\n".join(hotels) + "\n\n"
+                f"{trip_context['duration']}-day itinerary:\n\n{itinerary}"
             )
 
-            # Step 4: Generate a Gemini response with real flights
-            prompt = (
-                f"Here are real flight options from {trip_context['origin']} to {trip_context['destination']} "
-                f"on {trip_context['departure_date']}:\n\n" +
-                "\n".join(flights) +
-                f"\n\nTraveler preferences: budget {trip_context['budget']}, "
-                f"interests: {trip_context['interests']}, preferred accommodation: {trip_context['accommodation']}.\n\n"
-                "Please list and compare these flight options, and include the booking link for each one."
-            )
-        else:
-            # Not enough data yet — ask Gemini to help clarify
-            prompt = f"The user said: {user_input}\nPlease help clarify missing travel info like origin, destination, or date."
-
-        response = chat.send_message(prompt)
-        return response.text
+        # Default case: Not enough information
+        return "I need more information to help you plan your trip. Please provide at least the destination and duration of your trip."
 
     except Exception as e:
-        # return f"❌ Error: {e}"
-        return f"The user said: {user_input}\nPlease help clarify missing travel info like origin, destination, or date."
+        return f"Sorry, I encountered an error: {str(e)}. Please try again with your travel details."
 
 def main():
     print("\U0001F972 Travel Itinerary Chatbot with Memory\nType 'exit' to end the conversation.\n")

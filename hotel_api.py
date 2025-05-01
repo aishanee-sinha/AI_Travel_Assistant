@@ -2,8 +2,13 @@ import requests
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 load_dotenv()
+
+# Initialize Gemini
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+model = genai.GenerativeModel("models/gemini-1.5-flash-latest")
 
 # Replace with your actual affiliate token
 AFFILIATE_TOKEN = os.getenv('HOTEL_API')
@@ -52,62 +57,76 @@ def display_hotels(hotels):
 
 def normalize_date_for_hotel(date_str):
     """
-    Normalize date string to YYYY-MM-DD format, assuming 2025 if year is not provided.
-    Handles multiple input formats like:
-    - MM-DD
-    - DD-MM
-    - YYYY-MM-DD
-    - DD-MM-YYYY
+    Use Gemini to normalize any date format into YYYY-MM-DD
     """
     try:
-        # First try parsing as YYYY-MM-DD
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-    except ValueError:
+        # If already in YYYY-MM-DD format, validate and return
         try:
-            # Try DD-MM-YYYY format
-            date_obj = datetime.strptime(date_str, '%d-%m-%Y')
+            datetime.strptime(date_str, '%Y-%m-%d')
+            return date_str
         except ValueError:
-            try:
-                # Try MM-DD format (assume current year)
-                date_obj = datetime.strptime(f"{date_str}-2025", '%m-%d-%Y')
-            except ValueError:
-                # Try DD-MM format (assume current year)
-                date_obj = datetime.strptime(f"{date_str}-2025", '%d-%m-%Y')
-    
-    return date_obj.strftime('%Y-%m-%d')
+            pass
+            
+        prompt = (
+            "Convert this date to YYYY-MM-DD format. "
+            "If the year is not specified, use the current year. "
+            "If the date is ambiguous or invalid, return 'invalid'. "
+            "Return ONLY the date in YYYY-MM-DD format, nothing else. "
+            f"Date to normalize: {date_str}"
+        )
+        response = model.generate_content(prompt)
+        normalized_date = response.text.strip()
+        
+        # Validate the date format using datetime
+        try:
+            datetime.strptime(normalized_date, '%Y-%m-%d')
+            return normalized_date
+        except ValueError:
+            raise ValueError(f"Invalid date format: {date_str}")
+            
+    except Exception as e:
+        print(f"❌ Error normalizing date '{date_str}': {e}")
+        raise ValueError(f"Invalid date format: {date_str}")
 
 def get_hotel_prices_with_links(city_name, check_in, check_out, token=AFFILIATE_TOKEN):
-    location_data = search_location(city_name, token).get('results')
-    if not location_data or not location_data.get('locations'):
-        print(f"No location found for {city_name}.")
+    try:
+        # Normalize dates
+        check_in_date = normalize_date_for_hotel(check_in)
+        check_out_date = normalize_date_for_hotel(check_out)
+        
+        location_data = search_location(city_name, token).get('results')
+        if not location_data or not location_data.get('locations'):
+            print(f"No location found for {city_name}.")
+            return []
+            
+        location_id = location_data['locations'][0]['id']
+        print(f"Location ID for {city_name}: {location_id}")
+        
+        url = 'https://engine.hotellook.com/api/v2/cache.json'
+        params = {
+            'locationId': location_id,
+            'checkIn': check_in_date,
+            'checkOut': check_out_date,
+            'adults': 2,
+            'limit': 5,
+            'token': token
+        }
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        hotels = response.json()
+        
+        formatted_hotels = []
+        for idx, hotel in enumerate(hotels, start=1):
+            name = hotel.get('hotelName', 'N/A')
+            stars = hotel.get('stars', 'N/A')
+            price = hotel.get('priceFrom', 'N/A')
+            currency = hotel.get('currency', 'USD')
+            link = f"https://www.hotellook.com/hotels/{hotel['hotelId']}"
+            formatted_hotels.append(f"{idx}. {name} ({stars} stars) - {price} {currency}\nLink: {link}")
+        return formatted_hotels
+    except Exception as e:
+        print(f"❌ Error getting hotel prices: {e}")
         return []
-    location_id = location_data['locations'][0]['id']
-    print(f"Location ID for {city_name}: {location_id}")
-    check_in_date = normalize_date_for_hotel(check_in)
-    check_out_date = normalize_date_for_hotel(check_out)
-    
-    url = 'https://engine.hotellook.com/api/v2/cache.json'
-    params = {
-        'locationId': location_id,
-        'checkIn': check_in_date,
-        'checkOut': check_out_date,
-        'adults': 2,
-        'limit': 5,
-        'token': token
-    }
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-    hotels = response.json()
-    
-    formatted_hotels = []
-    for idx, hotel in enumerate(hotels, start=1):
-        name = hotel.get('hotelName', 'N/A')
-        stars = hotel.get('stars', 'N/A')
-        price = hotel.get('priceFrom', 'N/A')
-        currency = hotel.get('currency', 'USD')
-        link = f"https://www.hotellook.com/hotels/{hotel['hotelId']}"
-        formatted_hotels.append(f"{idx}. {name} ({stars} stars) - {price} {currency}\nLink: {link}")
-    return formatted_hotels
 
 # Example usage
 if __name__ == "__main__":

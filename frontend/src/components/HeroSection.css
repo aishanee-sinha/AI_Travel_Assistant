@@ -1,0 +1,81 @@
+/* src/components/HeroSection.css */
+.hero {
+    position: relative;
+    height: 80vh;
+    background-image: url('../../public/beach.jpg');
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  
+  .hero .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(30,30,39, 0.5);
+  }
+  
+  .hero-content {
+    position: relative;
+    max-width: 700px;
+    text-align: center;
+    color: white;
+    padding: 0 1rem;
+  }
+  
+  .hero-content h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+  
+  .hero-content p {
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 1.5rem;
+  }
+  
+  /* src/components/HeroSection.css */
+
+.hero-search {
+  display: flex;
+  width: 100%;
+  max-width: 800px;        /* wider overall box */
+  border-radius: 50px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  margin: 1rem auto 0;     /* center it under your copy */
+}
+
+.hero-input {
+  flex: 1;
+  padding: 1rem 1.5rem;   /* plenty of click area */
+  border: none;
+  font-size: 1.1rem;
+}
+
+.hero-input:focus {
+  outline: none;
+}
+
+.hero-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary);
+  border: none;
+  padding: 0 1.25rem;     /* just wide enough for the icon */
+  cursor: pointer;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.hero-button:hover {
+  background: #00e0c0;
+  transform: translateY(-2px);
+}
+
+.hero-button i {
+  font-size: 1.5rem;      /* larger icon */
+  color: white;
+}
