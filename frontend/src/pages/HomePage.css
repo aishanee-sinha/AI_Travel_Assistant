@@ -1,0 +1,230 @@
+.home-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.background-animation {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    z-index: -1;
+    opacity: 0.1;
+}
+
+.header {
+    margin-bottom: 3rem;
+    animation: fadeInDown 1s ease-out;
+}
+
+.title {
+    font-size: 4rem;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+}
+
+.subtitle {
+    font-size: 1.5rem;
+    color: #7f8c8d;
+    animation: fadeInUp 1s ease-out 0.5s backwards;
+}
+
+.features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+    perspective: 1000px;
+}
+
+.feature-card {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 2rem;
+    border-radius: 20px;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    transform-style: preserve-3d;
+    position: relative;
+    overflow: hidden;
+}
+
+.feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: var(--card-color);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.feature-card.active::before {
+    transform: scaleX(1);
+}
+
+.feature-card:hover {
+    transform: translateY(-10px) rotateX(5deg);
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+}
+
+.feature-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    transition: transform 0.3s ease;
+}
+
+.feature-card:hover .feature-icon {
+    transform: scale(1.2);
+}
+
+.feature-card h3 {
+    color: #2c3e50;
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+.feature-card p {
+    color: #7f8c8d;
+    line-height: 1.6;
+}
+
+.cta-section {
+    margin-top: 3rem;
+    animation: fadeInUp 1s ease-out 1s backwards;
+}
+
+.start-chat-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.2rem 2.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 50px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+.start-chat-button:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+}
+
+.button-arrow {
+    transition: transform 0.3s ease;
+}
+
+.start-chat-button:hover .button-arrow {
+    transform: translateX(5px);
+}
+
+.floating-elements {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.floating-element {
+    position: absolute;
+    font-size: 2rem;
+    opacity: 0.1;
+    animation: float 10s infinite ease-in-out;
+}
+
+.element-1 {
+    top: 10%;
+    left: 10%;
+    animation-delay: 0s;
+}
+
+.element-2 {
+    top: 20%;
+    right: 10%;
+    animation-delay: 2s;
+}
+
+.element-3 {
+    bottom: 20%;
+    left: 20%;
+    animation-delay: 4s;
+}
+
+.element-4 {
+    bottom: 10%;
+    right: 20%;
+    animation-delay: 6s;
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0) rotate(0deg);
+    }
+
+    50% {
+        transform: translateY(-20px) rotate(5deg);
+    }
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .home-container {
+        padding: 1rem;
+    }
+
+    .title {
+        font-size: 2.5rem;
+    }
+
+    .features {
+        grid-template-columns: 1fr;
+    }
+
+    .floating-elements {
+        display: none;
+    }
+}

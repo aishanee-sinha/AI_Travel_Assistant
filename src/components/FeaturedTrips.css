@@ -1,0 +1,27 @@
+.trips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+    gap: 1rem;
+    padding: 2rem;
+  }
+  
+  .trip-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  
+  .trip-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  }
+  
+  .trip-card i {
+    font-size: 2rem;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+  }
+  
