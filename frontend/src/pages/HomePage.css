@@ -1,0 +1,243 @@
+.home-hero {
+    min-height: 100vh;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #f6f9fc 0%, #eef2f7 100%);
+}
+
+.global-auth-buttons {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    display: flex;
+    gap: 1rem;
+    z-index: 100;
+}
+
+.sticky-auth {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+}
+
+.auth-button {
+    padding: 0.8rem 2rem;
+    border-radius: 50px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+
+.auth-button.login {
+    background: transparent;
+    color: #2c3e50;
+    border: 2px solid #2c3e50;
+}
+
+.auth-button.login:hover {
+    background: #2c3e50;
+    color: white;
+}
+
+.auth-button.signup {
+    background: #667eea;
+    color: white;
+}
+
+.auth-button.signup:hover {
+    background: #5a67d8;
+    transform: translateY(-2px);
+}
+
+.hero-center {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 8rem 2rem 4rem;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+}
+
+.travel-path-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+}
+
+.hero-title {
+    font-size: 4rem;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+    animation: fadeInDown 1s ease-out;
+}
+
+.hero-subtitle {
+    font-size: 1.5rem;
+    color: #7f8c8d;
+    animation: fadeInUp 1s ease-out 0.5s backwards;
+}
+
+.travel-path-container {
+    width: 100%;
+    max-width: 800px;
+    margin: 2rem auto;
+    position: relative;
+}
+
+.travel-path-svg {
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+}
+
+.travel-path-svg path {
+    stroke-dasharray: 8 8;
+    animation: pathPulse 2s linear infinite;
+}
+
+@keyframes pathPulse {
+    0% {
+        stroke-dashoffset: 0;
+    }
+    100% {
+        stroke-dashoffset: 16;
+    }
+}
+
+.travel-path-svg circle {
+    transition: all 0.3s ease;
+}
+
+.travel-path-svg text {
+    pointer-events: none;
+    user-select: none;
+}
+
+.start-chat-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.2rem 2.5rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 50px;
+    font-size: 1.2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+.start-chat-button:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+}
+
+.button-arrow {
+    transition: transform 0.3s ease;
+}
+
+.start-chat-button:hover .button-arrow {
+    transform: translateX(5px);
+}
+
+.background-animations {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.cloud {
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+    opacity: 0.1;
+    filter: blur(20px);
+}
+
+.cloud-1 {
+    width: 300px;
+    height: 300px;
+    top: 10%;
+    left: 10%;
+    animation: cloudMove 20s infinite ease-in-out;
+}
+
+.cloud-2 {
+    width: 400px;
+    height: 400px;
+    top: 20%;
+    right: 10%;
+    animation: cloudMove 25s infinite ease-in-out reverse;
+}
+
+@keyframes cloudMove {
+    0%, 100% {
+        transform: translate(0, 0);
+    }
+    50% {
+        transform: translate(50px, 30px);
+    }
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 900px) {
+    .travel-path-container {
+        max-width: 600px;
+    }
+    
+    .travel-path-svg {
+        height: 240px;
+    }
+}
+
+@media (max-width: 600px) {
+    .hero-title {
+        font-size: 2.5rem;
+    }
+    
+    .travel-path-svg {
+        height: 200px;
+    }
+    
+    .sticky-auth {
+        top: 1rem;
+        right: 1rem;
+    }
+    
+    .auth-button {
+        padding: 0.6rem 1.5rem;
+        font-size: 0.9rem;
+    }
+}
