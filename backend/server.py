@@ -40,18 +40,6 @@ app.add_middleware(
 # Initialize chat
 initialize_chat()
 
-class ChatRequest(BaseModel):
-    message: str
-
-@app.post("/api/chat")
-async def chat(request: ChatRequest):
-    try:
-        response = chat_with_gemini(request.message)
-        return {"response": response}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-if __name__ == "__main__":
 # --- Database setup ---
 SQLALCHEMY_DATABASE_URL = "sqlite:///./users.db"
 engine = create_engine(
