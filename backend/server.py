@@ -1,15 +1,9 @@
-<<<<<<< Updated upstream
-from fastapi import FastAPI, HTTPException
-=======
 from fastapi import FastAPI, HTTPException, Depends
->>>>>>> Stashed changes
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 import sys
 import os
-<<<<<<< Updated upstream
-=======
 import logging
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -22,24 +16,20 @@ from sample import chat_with_gemini
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
->>>>>>> Stashed changes
 
 # Add the current directory to the Python path
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-<<<<<<< Updated upstream
 from sample import chat_with_gemini, initialize_chat
 
-=======
->>>>>>> Stashed changes
+
 app = FastAPI()
 
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-<<<<<<< Updated upstream
     allow_origins=["http://localhost:3001"],  # Updated to match frontend port
 =======
     allow_origins=["http://localhost:3000"],  # Updated to match frontend port
@@ -49,7 +39,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-<<<<<<< Updated upstream
 # Initialize chat
 initialize_chat()
 
@@ -65,7 +54,6 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-=======
 # --- Database setup ---
 SQLALCHEMY_DATABASE_URL = "sqlite:///./users.db"
 engine = create_engine(
@@ -174,5 +162,4 @@ async def chat(request: ChatRequest):
 
 if __name__ == "__main__":
     logger.info("Starting server...")
->>>>>>> Stashed changes
     uvicorn.run(app, host="0.0.0.0", port=8000) 
