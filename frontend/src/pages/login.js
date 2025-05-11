@@ -1,4 +1,3 @@
-// src/pages/Login.js
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Navigate, Link, useNavigate } from 'react-router-dom';
@@ -6,11 +5,7 @@ import './login.css';
 
 export default function Login() {
   const { isAuthenticated, login } = useAuth();
-<<<<<<< Updated upstream
-  const [email, setEmail]     = useState('');
-=======
   const [email, setEmail] = useState('');
->>>>>>> Stashed changes
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
@@ -52,11 +47,7 @@ export default function Login() {
           <button type="submit">Log In</button>
         </form>
         <p className="login-footer">
-<<<<<<< Updated upstream
-          Don’t have an account? <Link to="/register">Sign up</Link>
-=======
           Don't have an account? <Link to="/register">Sign up</Link>
->>>>>>> Stashed changes
         </p>
       </div>
     </div>

@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './ChatWindow.css';
-<<<<<<< Updated upstream
-=======
 import FlightCard from './FlightCard';
 import HotelCard from './HotelCard';
 
@@ -20,7 +18,6 @@ const SECTION_LABELS = {
   weather: 'Weather',
   text: 'Info',
 };
->>>>>>> Stashed changes
 
 const ChatWindow = () => {
   const [messages, setMessages] = useState([]);
@@ -45,10 +42,6 @@ const ChatWindow = () => {
     setInput('');
     setIsLoading(true);
 
-<<<<<<< Updated upstream
-    // Add user message to chat with typing animation
-=======
->>>>>>> Stashed changes
     setMessages(prev => [...prev, { text: userMessage, sender: 'user' }]);
 
     try {
@@ -65,15 +58,7 @@ const ChatWindow = () => {
       }
 
       const data = await response.json();
-<<<<<<< Updated upstream
-
-      // Process the response to extract different sections
       const sections = processResponse(data.response);
-
-      // Add assistant's response to chat with typing animation
-=======
-      const sections = processResponse(data.response);
->>>>>>> Stashed changes
       setMessages(prev => [...prev, { text: sections, sender: 'assistant' }]);
     } catch (error) {
       console.error('Error:', error);
@@ -88,29 +73,6 @@ const ChatWindow = () => {
   };
 
   const processResponse = (response) => {
-<<<<<<< Updated upstream
-    // Split response into sections based on markers
-    const sections = response.split('\n\n');
-    return sections.map(section => {
-      if (section.startsWith('✈️')) {
-        return { type: 'flight', content: section };
-      } else if (section.startsWith('🏨')) {
-        return { type: 'hotel', content: section };
-      } else if (section.startsWith('🌤️')) {
-        return { type: 'weather', content: section };
-      } else if (section.startsWith('📅')) {
-        return { type: 'itinerary', content: section };
-      } else {
-        return { type: 'text', content: section };
-      }
-    });
-  };
-
-  const renderMessage = (message) => {
-    if (message.sender === 'user') {
-      return (
-        <div className="message user-message">
-=======
     // Split by double newlines for sections
     return response.split('\n\n').map(section => ({ content: section }));
   };
@@ -136,7 +98,6 @@ const ChatWindow = () => {
     if (message.sender === 'user') {
       return (
         <div className="message user-message chat-bubble slide-in-right">
->>>>>>> Stashed changes
           <div className="message-content">
             <div className="message-text">{message.text}</div>
             <div className="message-time">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
@@ -144,21 +105,7 @@ const ChatWindow = () => {
         </div>
       );
     }
-<<<<<<< Updated upstream
 
-    return (
-      <div className={`message assistant-message ${message.error ? 'error' : ''}`}>
-        <div className="message-content">
-          {Array.isArray(message.text) ? (
-            message.text.map((section, index) => (
-              <div key={index} className={`message-section ${section.type}`}>
-                {section.content}
-              </div>
-            ))
-          ) : (
-            <div className="message-text">{message.text}</div>
-          )}
-=======
     // Assistant message: clean stacked cards with HTML content
     return (
       <div className={`message assistant-message chat-bubble slide-in-left ${message.error ? 'error' : ''}`}>
@@ -166,7 +113,6 @@ const ChatWindow = () => {
           {Array.isArray(message.text)
             ? renderStackedCards(message.text)
             : <div className="message-text">{message.text}</div>}
->>>>>>> Stashed changes
           <div className="message-time">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
         </div>
       </div>
@@ -174,11 +120,7 @@ const ChatWindow = () => {
   };
 
   return (
-<<<<<<< Updated upstream
-    <div className="chat-container">
-=======
     <div className="chat-container chat-gradient-bg">
->>>>>>> Stashed changes
       <div className="chat-header">
         <h2>Travel Assistant</h2>
         <p>Ask me anything about travel planning!</p>
@@ -187,19 +129,11 @@ const ChatWindow = () => {
       <div className="chat-messages">
         {messages.map((message, index) => (
           <div key={index} className="message-wrapper">
-<<<<<<< Updated upstream
-            {renderMessage(message)}
-          </div>
-        ))}
-        {isLoading && (
-          <div className="message assistant-message">
-=======
             {renderMessage(message, index)}
           </div>
         ))}
         {isLoading && (
-          <div className="message assistant-message chat-bubble slide-in-left">
->>>>>>> Stashed changes
+          <div className="message assistant-message">
             <div className="message-content">
               <div className="typing-indicator">
                 <span></span>
@@ -212,33 +146,20 @@ const ChatWindow = () => {
         <div ref={messagesEndRef} />
       </div>
 
-<<<<<<< Updated upstream
       <form onSubmit={handleSubmit} className="chat-input-form">
-=======
-      <form onSubmit={handleSubmit} className="chat-input-form chat-input-glow">
->>>>>>> Stashed changes
         <input
-          ref={inputRef}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask me anything about travel..."
-          className="chat-input"
+          placeholder="Type your message..."
+          ref={inputRef}
         />
-        <button
-          type="submit"
-<<<<<<< Updated upstream
-          className="send-button"
-=======
-          className="send-button send-animate"
->>>>>>> Stashed changes
-          disabled={isLoading || !input.trim()}
-        >
-          <span className="send-icon">→</span>
+        <button type="submit" disabled={isLoading}>
+          Send
         </button>
       </form>
     </div>
   );
 };
 
-export default ChatWindow; 
+export default ChatWindow;
