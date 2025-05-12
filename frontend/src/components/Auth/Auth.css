@@ -1,0 +1,197 @@
+body,
+.auth-container {
+    min-height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+}
+
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #a1c4fd;
+    position: relative;
+}
+
+.auth-floating-shape {
+    display: none;
+}
+
+.auth-box {
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37), 0 0 40px 0 #a1c4fd;
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border-radius: 30px;
+    border: 1.5px solid rgba(255, 255, 255, 0.25);
+    padding: 3rem 2.5rem 2.5rem 2.5rem;
+    width: 100%;
+    max-width: 420px;
+    animation: fadeIn 0.7s cubic-bezier(.68, -0.55, .27, 1.55);
+    z-index: 2;
+    position: relative;
+}
+
+.auth-box h2 {
+    color: #4f4fc4;
+    font-size: 2.3rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    text-align: center;
+    letter-spacing: 1px;
+    text-shadow: 0 2px 10px #a1c4fd44;
+}
+
+.auth-subtitle {
+    color: #636e72;
+    text-align: center;
+    margin-bottom: 2rem;
+    font-size: 1.15rem;
+    font-weight: 500;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    z-index: 2;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group label {
+    color: #4f4fc4;
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: 0.5px;
+}
+
+.form-group input {
+    padding: 1rem;
+    border: 2px solid #a1c4fd;
+    border-radius: 12px;
+    font-size: 1.05rem;
+    transition: all 0.3s cubic-bezier(.68, -0.55, .27, 1.55);
+    background: rgba(255, 255, 255, 0.7);
+    color: #4f4fc4;
+    font-weight: 600;
+    box-shadow: 0 2px 8px #a1c4fd22;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #fcb69f;
+    background: #fff;
+    box-shadow: 0 0 0 6px #fcb69f33, 0 2px 8px #a1c4fd22;
+    color: #e17055;
+}
+
+.auth-button {
+    background: linear-gradient(90deg, #a1c4fd 0%, #c2e9fb 100%);
+    color: #4f4fc4;
+    padding: 1.1rem;
+    border: none;
+    border-radius: 16px;
+    font-size: 1.2rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(.68, -0.55, .27, 1.55);
+    margin-top: 1rem;
+    box-shadow: 0 4px 24px #a1c4fd55;
+    letter-spacing: 1px;
+    position: relative;
+    overflow: hidden;
+}
+
+.auth-button:before {
+    content: '';
+    position: absolute;
+    left: -75%;
+    top: 0;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(120deg, #fcb69f 0%, #a1c4fd 100%);
+    opacity: 0.3;
+    transform: skewX(-20deg);
+    transition: left 0.5s cubic-bezier(.68, -0.55, .27, 1.55);
+    z-index: 0;
+}
+
+.auth-button:hover:before {
+    left: 120%;
+}
+
+.auth-button:hover {
+    color: #fff;
+    background: linear-gradient(90deg, #fcb69f 0%, #a1c4fd 100%);
+    box-shadow: 0 8px 32px #fcb69f55;
+    transform: translateY(-2px) scale(1.04) rotate(-1deg);
+}
+
+.auth-switch {
+    text-align: center;
+    margin-top: 2rem;
+    color: #636e72;
+    font-weight: 500;
+}
+
+.auth-link {
+    color: #a1c4fd;
+    text-decoration: none;
+    font-weight: 700;
+    transition: color 0.3s cubic-bezier(.68, -0.55, .27, 1.55);
+}
+
+.auth-link:hover {
+    color: #fcb69f;
+}
+
+.error-message {
+    background: #fff5f5;
+    color: #e74c3c;
+    padding: 1rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    border: 1px solid rgba(231, 76, 60, 0.2);
+    font-weight: 700;
+    box-shadow: 0 2px 8px #e1705522;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (max-width: 480px) {
+    .auth-box {
+        padding: 1.5rem 0.7rem 1.2rem 0.7rem;
+    }
+
+    .auth-box h2 {
+        font-size: 1.5rem;
+    }
+
+    .auth-subtitle {
+        font-size: 0.95rem;
+    }
+
+    .auth-button {
+        font-size: 1rem;
+        padding: 0.8rem;
+    }
+}
