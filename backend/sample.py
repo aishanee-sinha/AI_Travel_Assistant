@@ -459,76 +459,205 @@ def parse_user_intent(user_input):
                 "next_question": "Where would you like to go?"
             }
 
+def get_special_destination_airports(destination):
+    """Get nearby airports for special destinations like national parks"""
+    special_destinations = {
+        "yellowstone": ["JAC", "BZN", "COD", "WYS"],  # Jackson Hole, Bozeman, Cody, West Yellowstone
+        "yosemite": ["FAT", "MMH", "RNO"],  # Fresno, Mammoth Lakes, Reno
+        "grand canyon": ["FLG", "GCN", "PHX"],  # Flagstaff, Grand Canyon, Phoenix
+        "glacier": ["FCA", "GPI", "BZN"],  # Kalispell, Glacier Park, Bozeman
+        "zion": ["CDC", "SGU", "LAS"],  # Cedar City, St. George, Las Vegas
+        "rocky mountain": ["DEN", "BJC", "FNL"],  # Denver, Broomfield, Fort Collins
+    }
+    
+    # Convert destination to lowercase and remove common words
+    dest = destination.lower().replace("national park", "").replace("np", "").strip()
+    return special_destinations.get(dest, [])
+
+def get_alternative_routes(origin, destination, date):
+    """Use Gemini to suggest alternative routes and connections"""
+    # First, check if this is a special destination like a national park
+    special_dest_prompt = (
+        "You are a travel routing expert. Analyze this destination and determine if it's a special location "
+        "like a national park, remote area, or tourist destination that might not have its own airport.\n"
+        f"Destination: {destination}\n\n"
+        "Return a JSON object with:\n"
+        "{\n"
+        "  'is_special_destination': boolean,\n"
+        "  'type': 'national_park' | 'remote_area' | 'tourist_destination' | 'regular_city',\n"
+        "  'nearby_airports': [list of relevant airport codes],\n"
+        "  'explanation': 'brief explanation of why this is a special destination'\n"
+        "}\n\n"
+        "For example, for 'Yellowstone National Park', return:\n"
+        "{\n"
+        "  'is_special_destination': true,\n"
+        "  'type': 'national_park',\n"
+        "  'nearby_airports': ['JAC', 'BZN', 'COD', 'WYS'],\n"
+        "  'explanation': 'Yellowstone is a national park with no commercial airport. Nearby airports serve different park entrances.'\n"
+        "}\n\n"
+        "Return ONLY the JSON object, no other text."
+    )
+    
+    try:
+        special_dest_response = chat.send_message(special_dest_prompt)
+        special_dest_text = special_dest_response.text.strip()
+        special_dest_text = special_dest_text.replace('```json', '').replace('```', '').strip()
+        special_dest_info = json.loads(special_dest_text)
+        print(f"Special destination analysis: {json.dumps(special_dest_info, indent=2)}")
+        
+        # Now get route suggestions based on whether it's a special destination
+        if special_dest_info['is_special_destination']:
+            prompt = (
+                "You are a travel routing expert. Suggest alternative flight routes for this journey:\n"
+                f"From: {origin}\n"
+                f"To: {destination}\n"
+                f"Date: {date}\n\n"
+                f"This is a {special_dest_info['type']} with the following nearby airports: {special_dest_info['nearby_airports']}\n"
+                f"{special_dest_info['explanation']}\n\n"
+                "Return a JSON array of route suggestions in this format:\n"
+                "[\n"
+                "  {\n"
+                "    'type': 'nearby_dest',\n"
+                "    'origin': 'airport_code',\n"
+                "    'destination': 'airport_code',\n"
+                "    'reasoning': 'explanation of why this route makes sense',\n"
+                "    'ground_transportation': 'details about getting to final destination'\n"
+                "  }\n"
+                "]\n\n"
+                "For each nearby airport, explain:\n"
+                "1. Which park entrance it serves\n"
+                "2. Ground transportation options and duration\n"
+                "3. Scenic value of the route\n"
+                "4. Any seasonal considerations\n\n"
+                "Return ONLY the JSON array, no other text."
+            )
+        else:
+            prompt = (
+                "You are a travel routing expert. Suggest alternative flight routes for this journey:\n"
+                f"From: {origin}\n"
+                f"To: {destination}\n"
+                f"Date: {date}\n\n"
+                "Consider:\n"
+                "1. Nearby airports for both origin and destination\n"
+                "2. Major hub airports that could serve as connections\n"
+                "3. Common routing patterns for this type of journey\n\n"
+                "Return a JSON array of route suggestions in this format:\n"
+                "[\n"
+                "  {\n"
+                "    'type': 'direct' | 'nearby_origin' | 'nearby_dest' | 'hub_connection',\n"
+                "    'origin': 'airport_code',\n"
+                "    'destination': 'airport_code',\n"
+                "    'hub': 'airport_code' (only for hub_connection),\n"
+                "    'reasoning': 'explanation of why this route makes sense'\n"
+                "  }\n"
+                "]\n\n"
+                "Return ONLY the JSON array, no other text."
+            )
+        
+        response = chat.send_message(prompt)
+        response_text = response.text.strip()
+        response_text = response_text.replace('```json', '').replace('```', '').strip()
+        routes = json.loads(response_text)
+        print(f"Gemini suggested routes: {json.dumps(routes, indent=2)}")
+        return routes
+    except Exception as e:
+        print(f"Error getting alternative routes: {str(e)}")
+        return []
+
 def get_alternative_flights(origin, destination, date):
     """Get alternative flight options when direct flights aren't available"""
     try:
-        # Get nearby airports for origin and destination
+        # Resolve origin and destination to airport codes
         origin_code = resolve_city_to_code(origin)
         dest_code = resolve_city_to_code(destination)
         
-        # Common major hub airports
-        major_hubs = {
-            'US': ['JFK', 'LAX', 'ORD', 'ATL', 'DFW'],
-            'EU': ['LHR', 'CDG', 'FRA', 'AMS', 'MAD'],
-            'ASIA': ['HKG', 'SIN', 'NRT', 'ICN', 'BKK'],
-            'MIDDLE_EAST': ['DXB', 'AUH', 'DOH']
-        }
+        print(f"Resolved codes - Origin: {origin_code}, Destination: {dest_code}")
         
-        # Get region for origin and destination
-        origin_region = get_region(origin_code)
-        dest_region = get_region(dest_code)
-        
-        # Get nearby airports
-        nearby_origin = get_nearby_airports(origin_code)
-        nearby_dest = get_nearby_airports(dest_code)
+        # Get route suggestions from Gemini
+        suggested_routes = get_alternative_routes(origin_code, dest_code, date)
+        print(f"Got {len(suggested_routes)} suggested routes from Gemini")
         
         alternative_options = []
         
-        # 1. Try nearby airports for origin
-        for nearby in nearby_origin:
-            flights = get_flight_prices_with_links(nearby, dest_code, date)
-            if flights:
-                alternative_options.append({
-                    'type': 'nearby_origin',
-                    'airport': nearby,
-                    'flights': flights
-                })
-        
-        # 2. Try nearby airports for destination
-        for nearby in nearby_dest:
-            flights = get_flight_prices_with_links(origin_code, nearby, date)
-            if flights:
-                alternative_options.append({
-                    'type': 'nearby_dest',
-                    'airport': nearby,
-                    'flights': flights
-                })
-        
-        # 3. Try major hub connections
-        relevant_hubs = []
-        if origin_region in major_hubs:
-            relevant_hubs.extend(major_hubs[origin_region])
-        if dest_region in major_hubs:
-            relevant_hubs.extend(major_hubs[dest_region])
-        
-        for hub in relevant_hubs:
-            # Check if we can fly to the hub
-            to_hub = get_flight_prices_with_links(origin_code, hub, date)
-            if to_hub:
-                # Check if we can fly from hub to destination
-                from_hub = get_flight_prices_with_links(hub, dest_code, date)
-                if from_hub:
+        for route in suggested_routes:
+            print(f"Processing route: {json.dumps(route, indent=2)}")
+            
+            if route['type'] == 'direct':
+                # Try direct flight
+                flights = get_flight_prices_with_links(route['origin'], route['destination'], date)
+                if flights:
                     alternative_options.append({
-                        'type': 'hub_connection',
-                        'hub': hub,
-                        'to_hub': to_hub,
-                        'from_hub': from_hub
+                        'type': 'direct',
+                        'origin': route['origin'],
+                        'destination': route['destination'],
+                        'flights': flights,
+                        'reasoning': route['reasoning']
                     })
+            
+            elif route['type'] == 'nearby_origin':
+                # Try flights from nearby origin airport
+                flights = get_flight_prices_with_links(route['origin'], route['destination'], date)
+                if flights:
+                    alternative_options.append({
+                        'type': 'nearby_origin',
+                        'airport': route['origin'],
+                        'flights': flights,
+                        'reasoning': route['reasoning']
+                    })
+            
+            elif route['type'] == 'nearby_dest':
+                # Try flights to nearby destination airport
+                flights = get_flight_prices_with_links(route['origin'], route['destination'], date)
+                if flights:
+                    alternative_options.append({
+                        'type': 'nearby_dest',
+                        'airport': route['destination'],
+                        'flights': flights,
+                        'reasoning': route['reasoning'],
+                        'ground_transportation': route.get('ground_transportation', '')
+                    })
+            
+            elif route['type'] == 'hub_connection':
+                # Try hub connection
+                to_hub = get_flight_prices_with_links(route['origin'], route['hub'], date)
+                if to_hub:
+                    from_hub = get_flight_prices_with_links(route['hub'], route['destination'], date)
+                    if from_hub:
+                        alternative_options.append({
+                            'type': 'hub_connection',
+                            'hub': route['hub'],
+                            'to_hub': to_hub,
+                            'from_hub': from_hub,
+                            'reasoning': route['reasoning']
+                        })
         
+        print(f"Found {len(alternative_options)} alternative options")
         return alternative_options
     except Exception as e:
         print(f"Error getting alternative flights: {str(e)}")
         return []
+
+def get_ground_transportation(airport, destination):
+    """Get ground transportation options from airport to destination"""
+    # This would typically call an API or database
+    # For now, we'll use a simplified version
+    transportation = {
+        "yellowstone": {
+            "JAC": "2.5-hour drive to Yellowstone's South Entrance",
+            "BZN": "1.5-hour drive to Yellowstone's North Entrance",
+            "COD": "1-hour drive to Yellowstone's East Entrance",
+            "WYS": "Direct access to Yellowstone's West Entrance"
+        },
+        "yosemite": {
+            "FAT": "1.5-hour drive to Yosemite's South Entrance",
+            "MMH": "Direct access to Yosemite's East Entrance",
+            "RNO": "3-hour drive to Yosemite's East Entrance"
+        }
+    }
+    
+    # Convert destination to lowercase and remove common words
+    dest = destination.lower().replace("national park", "").replace("np", "").strip()
+    return transportation.get(dest, {}).get(airport, "Ground transportation available")
 
 def get_region(airport_code):
     """Get the region for an airport code"""
@@ -573,20 +702,32 @@ def format_alternative_options(alternatives):
     response = "Here are some alternative flight options:\n\n"
     
     for alt in alternatives:
-        if alt['type'] == 'nearby_origin':
+        if alt['type'] == 'direct':
+            response += f"✈️ Direct Flight Option:\n"
+            response += f"  {alt['reasoning']}\n"
+            for flight in alt['flights']:
+                response += f"  • {flight}\n"
+            response += "\n"
+            
+        elif alt['type'] == 'nearby_origin':
             response += f"✈️ Flights from nearby airport {alt['airport']}:\n"
+            response += f"  {alt['reasoning']}\n"
             for flight in alt['flights']:
                 response += f"  • {flight}\n"
             response += "\n"
             
         elif alt['type'] == 'nearby_dest':
             response += f"✈️ Flights to nearby airport {alt['airport']}:\n"
+            response += f"  {alt['reasoning']}\n"
             for flight in alt['flights']:
                 response += f"  • {flight}\n"
+            if alt.get('ground_transportation'):
+                response += f"  🚗 Ground Transportation: {alt['ground_transportation']}\n"
             response += "\n"
             
         elif alt['type'] == 'hub_connection':
             response += f"✈️ Multi-city option via {alt['hub']}:\n"
+            response += f"  {alt['reasoning']}\n"
             response += "  First leg:\n"
             for flight in alt['to_hub']:
                 response += f"    • {flight}\n"
@@ -602,101 +743,103 @@ def format_alternative_options(alternatives):
     
     return response
 
-def create_rag_context(flight_data, hotel_data, weather_data, destination, duration, interests):
+def create_rag_context(flights, hotels, weather, destination, duration, interests):
     """Create a context for RAG-based itinerary generation"""
     context = {
         "destination": destination,
         "duration": duration,
         "interests": interests,
-        "flight_info": {
-            "arrival_time": None,
-            "departure_time": None,
-            "airline": None
-        },
-        "hotel_info": {
-            "location": None,
-            "price_range": None,
-            "amenities": []
-        },
-        "weather_info": {
-            "temperature": None,
-            "conditions": None,
-            "forecast": []
-        }
+        "flights": flights,
+        "hotels": hotels,
+        "weather": weather,
+        "available_activities": get_available_activities(destination),
+        "local_events": get_local_events(destination),
+        "restaurant_recommendations": get_restaurant_recommendations(destination)
     }
-    
-    # Extract flight information
-    if flight_data:
-        try:
-            # Get the first flight option
-            first_flight = flight_data[0]
-            flight_parts = first_flight.split('\n')
-            for part in flight_parts:
-                if '→' in part:
-                    times = part.split('→')[1].strip()
-                    context["flight_info"]["arrival_time"] = times.split('-')[0].strip()
-                if '$' in part:
-                    context["flight_info"]["airline"] = part.split('-')[0].strip()
-        except Exception as e:
-            print(f"Error parsing flight data: {str(e)}")
-    
-    # Extract hotel information
-    if hotel_data:
-        try:
-            # Get the first hotel option
-            first_hotel = hotel_data[0]
-            hotel_parts = first_hotel.split('\n')
-            for part in hotel_parts:
-                if '$' in part:
-                    context["hotel_info"]["price_range"] = part.split('$')[1].split()[0]
-                if 'stars' in part.lower():
-                    context["hotel_info"]["amenities"].append(part.strip())
-        except Exception as e:
-            print(f"Error parsing hotel data: {str(e)}")
-    
-    # Extract weather information
-    if weather_data:
-        try:
-            weather_parts = weather_data.split('\n')
-            for part in weather_parts:
-                if '°C' in part or '°F' in part:
-                    context["weather_info"]["temperature"] = part.strip()
-                if any(condition in part.lower() for condition in ['sunny', 'rainy', 'cloudy', 'clear']):
-                    context["weather_info"]["conditions"] = part.strip()
-                if 'forecast' in part.lower():
-                    context["weather_info"]["forecast"].append(part.strip())
-        except Exception as e:
-            print(f"Error parsing weather data: {str(e)}")
-    
     return context
 
+def get_available_activities(destination):
+    """Get available activities and attractions for the destination"""
+    # This would typically call an API or database
+    # For now, we'll use a simplified version
+    activities = {
+        "London": [
+            "British Museum", "Tower of London", "Buckingham Palace",
+            "London Eye", "Westminster Abbey", "Hyde Park"
+        ],
+        "Paris": [
+            "Eiffel Tower", "Louvre Museum", "Notre-Dame",
+            "Champs-Élysées", "Montmartre", "Seine River Cruise"
+        ],
+        # Add more destinations as needed
+    }
+    return activities.get(destination, [])
+
+def get_local_events(destination):
+    """Get local events and festivals for the destination"""
+    # This would typically call an API or database
+    # For now, we'll use a simplified version
+    events = {
+        "London": [
+            "Changing of the Guard at Buckingham Palace",
+            "West End Shows",
+            "Portobello Road Market"
+        ],
+        "Paris": [
+            "Eiffel Tower Light Show",
+            "Louvre Night Opening",
+            "Seine River Festival"
+        ],
+        # Add more destinations as needed
+    }
+    return events.get(destination, [])
+
+def get_restaurant_recommendations(destination):
+    """Get restaurant recommendations for the destination"""
+    # This would typically call an API or database
+    # For now, we'll use a simplified version
+    restaurants = {
+        "London": [
+            "The Ivy", "Dishoom", "Sketch",
+            "Hawksmoor", "The Wolseley"
+        ],
+        "Paris": [
+            "Le Jules Verne", "L'Ami Louis",
+            "Le Comptoir du Relais", "Septime"
+        ],
+        # Add more destinations as needed
+    }
+    return restaurants.get(destination, [])
+
 def generate_rag_itinerary(context):
-    """Generate a personalized itinerary using RAG context"""
+    """Generate a personalized itinerary using RAG"""
     prompt = (
-        f"Create a detailed {context['duration']}-day itinerary for {context['destination']} "
-        f"considering the following real-time information:\n\n"
-        f"Flight Information:\n"
-        f"- Arrival Time: {context['flight_info']['arrival_time']}\n"
-        f"- Airline: {context['flight_info']['airline']}\n\n"
-        f"Hotel Information:\n"
-        f"- Price Range: {context['hotel_info']['price_range']}\n"
-        f"- Amenities: {', '.join(context['hotel_info']['amenities'])}\n\n"
-        f"Weather Information:\n"
-        f"- Current Conditions: {context['weather_info']['conditions']}\n"
-        f"- Temperature: {context['weather_info']['temperature']}\n"
-        f"- Forecast: {', '.join(context['weather_info']['forecast'])}\n\n"
-        f"User Interests: {context['interests']}\n\n"
+        "Create a detailed travel itinerary based on the following context:\n\n"
+        f"Destination: {context['destination']}\n"
+        f"Duration: {context['duration']} days\n"
+        f"Interests: {context['interests']}\n\n"
+        "Flight Information:\n"
+        f"{json.dumps(context['flights'], indent=2)}\n\n"
+        "Hotel Options:\n"
+        f"{json.dumps(context['hotels'], indent=2)}\n\n"
+        "Weather Forecast:\n"
+        f"{json.dumps(context['weather'], indent=2)}\n\n"
+        "Available Activities:\n"
+        f"{json.dumps(context['available_activities'], indent=2)}\n\n"
+        "Local Events:\n"
+        f"{json.dumps(context['local_events'], indent=2)}\n\n"
+        "Restaurant Recommendations:\n"
+        f"{json.dumps(context['restaurant_recommendations'], indent=2)}\n\n"
         "Please create a day-by-day itinerary that:\n"
-        "1. Accounts for arrival/departure times\n"
-        "2. Suggests activities suitable for the weather conditions\n"
-        "3. Recommends attractions near the hotel location\n"
-        "4. Includes indoor alternatives for bad weather\n"
-        "5. Considers the user's interests\n"
-        "6. Provides realistic timing for each activity\n"
-        "7. Includes transportation options between locations\n"
-        "8. Suggests restaurants and dining options\n\n"
-        "Format the response with clear day sections, morning/afternoon/evening activities, "
-        "and include practical tips for each day."
+        "1. Takes into account the weather forecast for each day\n"
+        "2. Considers the user's interests and preferences\n"
+        "3. Includes recommended restaurants near the activities\n"
+        "4. Suggests indoor activities for rainy days\n"
+        "5. Incorporates any special events happening during the stay\n"
+        "6. Provides transportation tips between locations\n"
+        "7. Includes estimated costs for activities\n"
+        "8. Suggests the best times to visit popular attractions\n"
+        "Format the response with clear day-by-day sections and include practical tips."
     )
     
     try:
@@ -704,7 +847,63 @@ def generate_rag_itinerary(context):
         return response.text
     except Exception as e:
         print(f"Error generating RAG itinerary: {str(e)}")
-        return None
+        return "I apologize, but I'm having trouble generating a personalized itinerary at the moment."
+
+def format_rag_response(itinerary, flights, hotels, weather):
+    """Format the complete RAG-based response"""
+    response = "Here's your personalized travel plan based on your preferences and real-time data:\n\n"
+    
+    # Add weather information
+    response += "🌤️ Weather Forecast:\n"
+    response += weather + "\n\n"
+    
+    # Add flight options
+    if flights:
+        response += "✈️ Flight Options:\n"
+        for flight in flights:
+            response += f"• {flight}\n"
+        response += "\n"
+    else:
+        response += "✈️ Direct Flight Options:\n"
+        response += f"• ❌ No direct flights found from {trip_context['origin']} to {trip_context['destination']} on {trip_context['departure_date']}\n\n"
+        
+        # Get alternative flight options
+        response += "🔍 Checking alternative routes...\n\n"
+        alternative_options = get_alternative_flights(
+            trip_context["origin"],
+            trip_context["destination"],
+            trip_context["departure_date"]
+        )
+        
+        if alternative_options:
+            response += format_alternative_options(alternative_options)
+        else:
+            response += "❌ No alternative flight options found.\n"
+            response += "Would you like to:\n"
+            response += "1. Try different dates\n"
+            response += "2. Look for other transportation options\n"
+            response += "3. Consider a different destination\n\n"
+    
+    # Add hotel options
+    if hotels:
+        response += "🏨 Hotel Options:\n"
+        for hotel in hotels:
+            response += f"• {hotel}\n"
+        response += "\n"
+    else:
+        response += "❌ No hotels found for your dates.\n\n"
+    
+    # Add personalized itinerary
+    response += "📅 Your Personalized Itinerary:\n"
+    response += "This itinerary is customized based on:\n"
+    response += "• Your preferences and interests\n"
+    response += "• Real-time weather forecasts\n"
+    response += "• Available flights and hotels\n"
+    response += "• Local events and activities\n"
+    response += "• Restaurant recommendations\n\n"
+    response += itinerary
+    
+    return response
 
 def chat_with_gemini(user_input):
     try:
@@ -729,184 +928,107 @@ def chat_with_gemini(user_input):
         print("\U0001F4E6 Current Trip Context:", trip_context)
         
         # Stage 1: Check if we have destination and duration
-        if trip_context["destination"] and trip_context["duration"]:
-            # Generate initial itinerary
-            itinerary = generate_itinerary_html(
-                trip_context["destination"],
-                trip_context["duration"],
-                trip_context.get("interests", "")
+        if not trip_context["destination"]:
+            return "Where would you like to go?"
+            
+        if not trip_context["duration"]:
+            return f"How many days would you like to stay in {trip_context['destination']}?"
+            
+        # Stage 2: If we have destination and duration, ask for interests
+        if not trip_context.get("interests"):
+            return (
+                f"Great! You want to visit {trip_context['destination']} for {trip_context['duration']} days. "
+                "To create a personalized itinerary, please tell me about your interests and preferences. "
+                "For example:\n"
+                "• What activities do you enjoy? (e.g., museums, outdoor activities, food tours)\n"
+                "• Any specific attractions you'd like to visit?\n"
+                "• Do you prefer a relaxed or active pace?\n"
+                "• Any dietary preferences or restrictions?"
             )
             
-            response_text = "Here's a general itinerary for your trip:\n\n"
-            response_text += itinerary + "\n\n"
+        # Stage 3: If we have interests, ask for dates and origin
+        if not trip_context["departure_date"]:
+            return "When would you like to start your trip? (Please provide a date)"
             
-            # If we don't have dates and origin, ask for them
-            if not trip_context["departure_date"] or not trip_context["origin"]:
-                response_text += "Would you like to see flight and hotel options? Please provide your travel dates and origin city."
-                return response_text
+        if not trip_context["origin"]:
+            return "Which city will you be traveling from?"
             
-            # Stage 2: If we have dates but no origin
-            if trip_context["departure_date"] and not trip_context["origin"]:
-                # Calculate return date if we have duration
-                if not trip_context["return_date"]:
-                    trip_context["return_date"] = calculate_return_date(
-                        trip_context["departure_date"],
-                        trip_context["duration"]
-                    )
-                
-                # Get hotel options
-                hotels = get_hotel_prices_with_links(
-                    trip_context["destination"],
+        # Stage 4: If we have all required information, generate the complete plan
+        if trip_context["departure_date"] and trip_context["origin"]:
+            # Calculate return date if we have duration
+            if not trip_context["return_date"]:
+                trip_context["return_date"] = calculate_return_date(
                     trip_context["departure_date"],
-                    trip_context["return_date"]
+                    trip_context["duration"]
                 )
-                
-                # Get weather information
-                try:
-                    departure_weather = get_weather_climatology(
-                        trip_context["destination"],
-                        trip_context["departure_date"]
-                    )
-                    return_weather = get_weather_climatology(
-                        trip_context["destination"],
-                        trip_context["return_date"]
-                    )
-                    
-                    response_text = "Here's what I found for your trip:\n\n"
-                    response_text += "🌤️ Weather Forecast:\n\n"
-                    response_text += departure_weather + "\n"
-                    response_text += return_weather + "\n\n"
-                    
-                    if hotels:
-                        response_text += "🏨 Hotel Options:\n\n"
-                        for hotel in hotels:
-                            response_text += hotel + "\n"
-                    else:
-                        response_text += "❌ No hotels found for your dates.\n"
-                    
-                    response_text += "\nTo see flight options, please provide your origin city."
-                    return response_text
-                    
-                except Exception as e:
-                    print(f"Error fetching data: {str(e)}")
-                    response_text += "❌ Unable to fetch some data at the moment.\n"
-                    response_text += "To see flight options, please provide your origin city."
-                    return response_text
             
-            # Stage 3: If we have all required information
-            if trip_context["departure_date"] and trip_context["origin"]:
-                # Calculate return date if we have duration
-                if not trip_context["return_date"]:
-                    trip_context["return_date"] = calculate_return_date(
-                        trip_context["departure_date"],
-                        trip_context["duration"]
-                    )
-                
-                # Get flight options
-                flights = get_flight_prices_with_links(
+            # Get flight options
+            flights = get_flight_prices_with_links(
+                trip_context["origin"],
+                trip_context["destination"],
+                trip_context["departure_date"]
+            )
+            
+            # If no direct flights found, get alternative routes
+            if not flights:
+                print("No direct flights found, checking alternative routes...")
+                alternative_options = get_alternative_flights(
                     trip_context["origin"],
                     trip_context["destination"],
                     trip_context["departure_date"]
                 )
                 
-                # Get hotel options
-                hotels = get_hotel_prices_with_links(
+                if alternative_options:
+                    print(f"Found {len(alternative_options)} alternative routes")
+                    response = format_alternative_options(alternative_options)
+                    return response
+                else:
+                    print("No alternative routes found")
+            
+            # Get hotel options
+            hotels = get_hotel_prices_with_links(
+                trip_context["destination"],
+                trip_context["departure_date"],
+                trip_context["return_date"]
+            )
+            
+            # Get weather information
+            try:
+                departure_weather = get_weather_climatology(
                     trip_context["destination"],
-                    trip_context["departure_date"],
+                    trip_context["departure_date"]
+                )
+                return_weather = get_weather_climatology(
+                    trip_context["destination"],
                     trip_context["return_date"]
                 )
+                weather_info = f"Departure: {departure_weather}\nReturn: {return_weather}"
                 
-                # Get weather information
-                try:
-                    departure_weather = get_weather_climatology(
-                        trip_context["destination"],
-                        trip_context["departure_date"]
-                    )
-                    return_weather = get_weather_climatology(
-                        trip_context["destination"],
-                        trip_context["return_date"]
-                    )
-                    
-                    # Create RAG context
-                    rag_context = create_rag_context(
-                        flights,
-                        hotels,
-                        departure_weather,
-                        trip_context["destination"],
-                        trip_context["duration"],
-                        trip_context.get("interests", "")
-                    )
-                    
-                    # Generate RAG-based itinerary
-                    rag_itinerary = generate_rag_itinerary(rag_context)
-                    
-                    response_text = "Here's your complete travel plan:\n\n"
-                    
-                    # Add weather information
-                    response_text += "🌤️ Weather Forecast:\n\n"
-                    response_text += departure_weather + "\n"
-                    response_text += return_weather + "\n\n"
-                    
-                    # Add flight options
-                    if flights:
-                        response_text += "✈️ Flight Options:\n\n"
-                        for flight in flights:
-                            response_text += flight + "\n"
-                        response_text += "\n"
-                    else:
-                        # Try to get alternative flight options
-                        alternative_options = get_alternative_flights(
-                            trip_context["origin"],
-                            trip_context["destination"],
-                            trip_context["departure_date"]
-                        )
-                        
-                        if alternative_options:
-                            response_text += format_alternative_options(alternative_options)
-                        else:
-                            response_text += "❌ No direct flights found for your dates.\n"
-                            response_text += "Would you like to:\n"
-                            response_text += "1. Try different dates\n"
-                            response_text += "2. Look for other transportation options\n"
-                            response_text += "3. Consider a different destination\n"
-                    
-                    # Add hotel options
-                    if hotels:
-                        response_text += "🏨 Hotel Options:\n\n"
-                        for hotel in hotels:
-                            response_text += hotel + "\n"
-                        response_text += "\n"
-                    else:
-                        response_text += "❌ No hotels found for your dates.\n\n"
-                    
-                    # Add RAG-based itinerary
-                    if rag_itinerary:
-                        response_text += "📅 Your Personalized Itinerary:\n\n"
-                        response_text += rag_itinerary + "\n\n"
-                    else:
-                        # Fallback to basic itinerary if RAG fails
-                        basic_itinerary = generate_itinerary_html(
-                            trip_context["destination"],
-                            trip_context["duration"],
-                            trip_context.get("interests", "")
-                        )
-                        response_text += "�� Your Itinerary:\n\n"
-                        response_text += basic_itinerary + "\n\n"
-                    
-                    return response_text
-                    
-                except Exception as e:
-                    print(f"Error fetching data: {str(e)}")
-                    response_text += "❌ Unable to fetch some data at the moment.\n"
-                    return response_text
+                # Create RAG context
+                rag_context = create_rag_context(
+                    flights,
+                    hotels,
+                    weather_info,
+                    trip_context["destination"],
+                    trip_context["duration"],
+                    trip_context["interests"]
+                )
+                
+                # Generate personalized itinerary using RAG
+                itinerary = generate_rag_itinerary(rag_context)
+                
+                # Format complete response
+                response_text = format_rag_response(itinerary, flights, hotels, weather_info)
+                
+            except Exception as e:
+                print(f"Error fetching data: {str(e)}")
+                response_text = "❌ Unable to fetch some data at the moment.\n"
+                response_text += "Please try again later."
+            
+            return response_text
         
-        # If we don't have destination or duration, ask for them
-        if not trip_context["destination"]:
-            return "Where would you like to go?"
-        if not trip_context["duration"]:
-            return f"How many days would you like to stay in {trip_context['destination']}?"
-        
-        return "I need more information to help plan your trip. Please provide your destination and duration of stay."
+        # If we're missing any required information, use Gemini's next question
+        return parsed_intent["next_question"]
         
     except Exception as e:
         print(f"Error in chat_with_gemini: {str(e)}")
