@@ -459,6 +459,253 @@ def parse_user_intent(user_input):
                 "next_question": "Where would you like to go?"
             }
 
+def get_alternative_flights(origin, destination, date):
+    """Get alternative flight options when direct flights aren't available"""
+    try:
+        # Get nearby airports for origin and destination
+        origin_code = resolve_city_to_code(origin)
+        dest_code = resolve_city_to_code(destination)
+        
+        # Common major hub airports
+        major_hubs = {
+            'US': ['JFK', 'LAX', 'ORD', 'ATL', 'DFW'],
+            'EU': ['LHR', 'CDG', 'FRA', 'AMS', 'MAD'],
+            'ASIA': ['HKG', 'SIN', 'NRT', 'ICN', 'BKK'],
+            'MIDDLE_EAST': ['DXB', 'AUH', 'DOH']
+        }
+        
+        # Get region for origin and destination
+        origin_region = get_region(origin_code)
+        dest_region = get_region(dest_code)
+        
+        # Get nearby airports
+        nearby_origin = get_nearby_airports(origin_code)
+        nearby_dest = get_nearby_airports(dest_code)
+        
+        alternative_options = []
+        
+        # 1. Try nearby airports for origin
+        for nearby in nearby_origin:
+            flights = get_flight_prices_with_links(nearby, dest_code, date)
+            if flights:
+                alternative_options.append({
+                    'type': 'nearby_origin',
+                    'airport': nearby,
+                    'flights': flights
+                })
+        
+        # 2. Try nearby airports for destination
+        for nearby in nearby_dest:
+            flights = get_flight_prices_with_links(origin_code, nearby, date)
+            if flights:
+                alternative_options.append({
+                    'type': 'nearby_dest',
+                    'airport': nearby,
+                    'flights': flights
+                })
+        
+        # 3. Try major hub connections
+        relevant_hubs = []
+        if origin_region in major_hubs:
+            relevant_hubs.extend(major_hubs[origin_region])
+        if dest_region in major_hubs:
+            relevant_hubs.extend(major_hubs[dest_region])
+        
+        for hub in relevant_hubs:
+            # Check if we can fly to the hub
+            to_hub = get_flight_prices_with_links(origin_code, hub, date)
+            if to_hub:
+                # Check if we can fly from hub to destination
+                from_hub = get_flight_prices_with_links(hub, dest_code, date)
+                if from_hub:
+                    alternative_options.append({
+                        'type': 'hub_connection',
+                        'hub': hub,
+                        'to_hub': to_hub,
+                        'from_hub': from_hub
+                    })
+        
+        return alternative_options
+    except Exception as e:
+        print(f"Error getting alternative flights: {str(e)}")
+        return []
+
+def get_region(airport_code):
+    """Get the region for an airport code"""
+    # This is a simplified version - you might want to use a proper airport database
+    us_airports = ['SFO', 'LAX', 'JFK', 'ORD', 'ATL', 'DFW', 'DEN', 'SEA', 'LAS', 'MIA']
+    eu_airports = ['LHR', 'CDG', 'FRA', 'AMS', 'MAD', 'FCO', 'MUC', 'ZRH', 'BCN', 'LIS']
+    asia_airports = ['HKG', 'SIN', 'NRT', 'ICN', 'BKK', 'PEK', 'PVG', 'DEL', 'BOM', 'KUL']
+    middle_east = ['DXB', 'AUH', 'DOH', 'RUH', 'TLV', 'CAI', 'IST']
+    
+    if airport_code in us_airports:
+        return 'US'
+    elif airport_code in eu_airports:
+        return 'EU'
+    elif airport_code in asia_airports:
+        return 'ASIA'
+    elif airport_code in middle_east:
+        return 'MIDDLE_EAST'
+    return 'OTHER'
+
+def get_nearby_airports(airport_code):
+    """Get nearby airports for a given airport code"""
+    # This is a simplified version - you might want to use a proper airport database
+    nearby_map = {
+        'SFO': ['OAK', 'SJC'],
+        'LAX': ['BUR', 'SNA', 'ONT'],
+        'JFK': ['LGA', 'EWR'],
+        'LHR': ['LGW', 'STN', 'LTN'],
+        'CDG': ['ORY', 'BVA'],
+        'FRA': ['HHN', 'CGN'],
+        'AMS': ['RTM', 'EIN'],
+        'HKG': ['MFM', 'CAN'],
+        'SIN': ['KUL', 'BKK'],
+        'NRT': ['HND', 'CTS']
+    }
+    return nearby_map.get(airport_code, [])
+
+def format_alternative_options(alternatives):
+    """Format alternative flight options into a readable string"""
+    if not alternatives:
+        return "No alternative flight options found."
+    
+    response = "Here are some alternative flight options:\n\n"
+    
+    for alt in alternatives:
+        if alt['type'] == 'nearby_origin':
+            response += f"✈️ Flights from nearby airport {alt['airport']}:\n"
+            for flight in alt['flights']:
+                response += f"  • {flight}\n"
+            response += "\n"
+            
+        elif alt['type'] == 'nearby_dest':
+            response += f"✈️ Flights to nearby airport {alt['airport']}:\n"
+            for flight in alt['flights']:
+                response += f"  • {flight}\n"
+            response += "\n"
+            
+        elif alt['type'] == 'hub_connection':
+            response += f"✈️ Multi-city option via {alt['hub']}:\n"
+            response += "  First leg:\n"
+            for flight in alt['to_hub']:
+                response += f"    • {flight}\n"
+            response += "  Second leg:\n"
+            for flight in alt['from_hub']:
+                response += f"    • {flight}\n"
+            response += "\n"
+    
+    response += "Would you like to:\n"
+    response += "1. Book any of these alternative flights\n"
+    response += "2. Try different dates\n"
+    response += "3. Look for other transportation options\n"
+    
+    return response
+
+def create_rag_context(flight_data, hotel_data, weather_data, destination, duration, interests):
+    """Create a context for RAG-based itinerary generation"""
+    context = {
+        "destination": destination,
+        "duration": duration,
+        "interests": interests,
+        "flight_info": {
+            "arrival_time": None,
+            "departure_time": None,
+            "airline": None
+        },
+        "hotel_info": {
+            "location": None,
+            "price_range": None,
+            "amenities": []
+        },
+        "weather_info": {
+            "temperature": None,
+            "conditions": None,
+            "forecast": []
+        }
+    }
+    
+    # Extract flight information
+    if flight_data:
+        try:
+            # Get the first flight option
+            first_flight = flight_data[0]
+            flight_parts = first_flight.split('\n')
+            for part in flight_parts:
+                if '→' in part:
+                    times = part.split('→')[1].strip()
+                    context["flight_info"]["arrival_time"] = times.split('-')[0].strip()
+                if '$' in part:
+                    context["flight_info"]["airline"] = part.split('-')[0].strip()
+        except Exception as e:
+            print(f"Error parsing flight data: {str(e)}")
+    
+    # Extract hotel information
+    if hotel_data:
+        try:
+            # Get the first hotel option
+            first_hotel = hotel_data[0]
+            hotel_parts = first_hotel.split('\n')
+            for part in hotel_parts:
+                if '$' in part:
+                    context["hotel_info"]["price_range"] = part.split('$')[1].split()[0]
+                if 'stars' in part.lower():
+                    context["hotel_info"]["amenities"].append(part.strip())
+        except Exception as e:
+            print(f"Error parsing hotel data: {str(e)}")
+    
+    # Extract weather information
+    if weather_data:
+        try:
+            weather_parts = weather_data.split('\n')
+            for part in weather_parts:
+                if '°C' in part or '°F' in part:
+                    context["weather_info"]["temperature"] = part.strip()
+                if any(condition in part.lower() for condition in ['sunny', 'rainy', 'cloudy', 'clear']):
+                    context["weather_info"]["conditions"] = part.strip()
+                if 'forecast' in part.lower():
+                    context["weather_info"]["forecast"].append(part.strip())
+        except Exception as e:
+            print(f"Error parsing weather data: {str(e)}")
+    
+    return context
+
+def generate_rag_itinerary(context):
+    """Generate a personalized itinerary using RAG context"""
+    prompt = (
+        f"Create a detailed {context['duration']}-day itinerary for {context['destination']} "
+        f"considering the following real-time information:\n\n"
+        f"Flight Information:\n"
+        f"- Arrival Time: {context['flight_info']['arrival_time']}\n"
+        f"- Airline: {context['flight_info']['airline']}\n\n"
+        f"Hotel Information:\n"
+        f"- Price Range: {context['hotel_info']['price_range']}\n"
+        f"- Amenities: {', '.join(context['hotel_info']['amenities'])}\n\n"
+        f"Weather Information:\n"
+        f"- Current Conditions: {context['weather_info']['conditions']}\n"
+        f"- Temperature: {context['weather_info']['temperature']}\n"
+        f"- Forecast: {', '.join(context['weather_info']['forecast'])}\n\n"
+        f"User Interests: {context['interests']}\n\n"
+        "Please create a day-by-day itinerary that:\n"
+        "1. Accounts for arrival/departure times\n"
+        "2. Suggests activities suitable for the weather conditions\n"
+        "3. Recommends attractions near the hotel location\n"
+        "4. Includes indoor alternatives for bad weather\n"
+        "5. Considers the user's interests\n"
+        "6. Provides realistic timing for each activity\n"
+        "7. Includes transportation options between locations\n"
+        "8. Suggests restaurants and dining options\n\n"
+        "Format the response with clear day sections, morning/afternoon/evening activities, "
+        "and include practical tips for each day."
+    )
+    
+    try:
+        response = chat.send_message(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Error generating RAG itinerary: {str(e)}")
+        return None
+
 def chat_with_gemini(user_input):
     try:
         # Parse user intent using Gemini
@@ -580,6 +827,19 @@ def chat_with_gemini(user_input):
                         trip_context["return_date"]
                     )
                     
+                    # Create RAG context
+                    rag_context = create_rag_context(
+                        flights,
+                        hotels,
+                        departure_weather,
+                        trip_context["destination"],
+                        trip_context["duration"],
+                        trip_context.get("interests", "")
+                    )
+                    
+                    # Generate RAG-based itinerary
+                    rag_itinerary = generate_rag_itinerary(rag_context)
+                    
                     response_text = "Here's your complete travel plan:\n\n"
                     
                     # Add weather information
@@ -594,7 +854,21 @@ def chat_with_gemini(user_input):
                             response_text += flight + "\n"
                         response_text += "\n"
                     else:
-                        response_text += "❌ No direct flights found for your dates.\n\n"
+                        # Try to get alternative flight options
+                        alternative_options = get_alternative_flights(
+                            trip_context["origin"],
+                            trip_context["destination"],
+                            trip_context["departure_date"]
+                        )
+                        
+                        if alternative_options:
+                            response_text += format_alternative_options(alternative_options)
+                        else:
+                            response_text += "❌ No direct flights found for your dates.\n"
+                            response_text += "Would you like to:\n"
+                            response_text += "1. Try different dates\n"
+                            response_text += "2. Look for other transportation options\n"
+                            response_text += "3. Consider a different destination\n"
                     
                     # Add hotel options
                     if hotels:
@@ -605,18 +879,19 @@ def chat_with_gemini(user_input):
                     else:
                         response_text += "❌ No hotels found for your dates.\n\n"
                     
-                    # Stage 4: Ask about interests for revised itinerary
-                    if not trip_context.get("interests"):
-                        response_text += "Please let me know your interests and preferences and I can customize the itinerary accordingly."
+                    # Add RAG-based itinerary
+                    if rag_itinerary:
+                        response_text += "📅 Your Personalized Itinerary:\n\n"
+                        response_text += rag_itinerary + "\n\n"
                     else:
-                        # Stage 5: Generate revised itinerary with interests
-                        revised_itinerary = generate_itinerary_html(
+                        # Fallback to basic itinerary if RAG fails
+                        basic_itinerary = generate_itinerary_html(
                             trip_context["destination"],
                             trip_context["duration"],
-                            trip_context["interests"]
+                            trip_context.get("interests", "")
                         )
-                        response_text += "Here's your revised itinerary based on your interests:\n\n"
-                        response_text += revised_itinerary
+                        response_text += "�� Your Itinerary:\n\n"
+                        response_text += basic_itinerary + "\n\n"
                     
                     return response_text
                     
