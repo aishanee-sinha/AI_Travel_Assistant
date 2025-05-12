@@ -149,6 +149,66 @@ const ChatWindow = () => {
             </div>
           </div>
         );
+
+      case 'itinerary':
+        // Process itinerary content to group by days
+        const itineraryContent = section.content.join('\n');
+        const dayMatches = itineraryContent.match(/Day \d+.*?(?=Day \d+|$)/gs) || [];
+        
+        return (
+          <div className="section-wrapper">
+            <h1>YOUR ITINERARY</h1>
+            <div className="itinerary-cards-grid">
+              {dayMatches.map((dayContent, idx) => {
+                // Extract day number and content
+                const dayMatch = dayContent.match(/Day (\d+)/);
+                const dayNumber = dayMatch ? dayMatch[1] : idx + 1;
+                
+                // Split content into morning, afternoon, and evening
+                const morning = dayContent.match(/Morning:(.*?)(?=Afternoon:|Evening:|$)/s)?.[1]?.trim() || '';
+                const afternoon = dayContent.match(/Afternoon:(.*?)(?=Evening:|$)/s)?.[1]?.trim() || '';
+                const evening = dayContent.match(/Evening:(.*?)$/s)?.[1]?.trim() || '';
+
+                // Function to remove asterisks and clean up text
+                const cleanText = (text) => {
+                  return text
+                    .replace(/\*/g, '') // Remove asterisks
+                    .replace(/\n\s*\n/g, '\n') // Remove extra blank lines
+                    .trim();
+                };
+
+                return (
+                  <div key={idx} className="itinerary-card">
+                    <div className="itinerary-card-header">
+                      <h2>Day {dayNumber}</h2>
+                    </div>
+                    <div className="itinerary-card-content">
+                      {morning && (
+                        <div className="itinerary-section morning">
+                          <h3>🌅 Morning</h3>
+                          <p>{cleanText(morning)}</p>
+                        </div>
+                      )}
+                      {afternoon && (
+                        <div className="itinerary-section afternoon">
+                          <h3>☀️ Afternoon</h3>
+                          <p>{cleanText(afternoon)}</p>
+                        </div>
+                      )}
+                      {evening && (
+                        <div className="itinerary-section evening">
+                          <h3>🌙 Evening</h3>
+                          <p>{cleanText(evening)}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+
       default:
         return (
           <div className="section text-section">

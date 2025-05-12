@@ -283,9 +283,95 @@
   width: 100%;
 }
 
+.itinerary-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-top: 15px;
+  width: 100%;
+}
+
 /* Make hotel cards longer */
 .hotel-cards-grid .hotel-card {
   min-height: 300px;
+}
+
+/* Itinerary card styles */
+.itinerary-card {
+  background: white;
+  border-radius: 20px;
+  padding: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  min-height: 400px;
+}
+
+.itinerary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+}
+
+.itinerary-card-header {
+  margin-bottom: 1.5rem;
+}
+
+.itinerary-card-header h2 {
+  font-size: 1.5rem;
+  color: #2d3748;
+  margin: 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.itinerary-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.itinerary-section {
+  padding: 1rem;
+  border-radius: 10px;
+  background: #f8f9fa;
+}
+
+.itinerary-section h3 {
+  font-size: 1.1rem;
+  color: #2d3748;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.itinerary-section p {
+  margin: 0;
+  color: #4a5568;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.morning {
+  background: #fff8e1;
+  border-left: 4px solid #ffc107;
+}
+
+.afternoon {
+  background: #e3f2fd;
+  border-left: 4px solid #2196f3;
+}
+
+.evening {
+  background: #f3e5f5;
+  border-left: 4px solid #9c27b0;
 }
 
 /* Section headers */
@@ -303,14 +389,20 @@
     grid-template-columns: repeat(2, 1fr);
   }
   
-  .hotel-cards-grid {
+  .hotel-cards-grid,
+  .itinerary-cards-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 768px) {
   .flight-cards-grid,
-  .hotel-cards-grid {
+  .hotel-cards-grid,
+  .itinerary-cards-grid {
     grid-template-columns: 1fr;
+  }
+
+  .itinerary-card {
+    min-height: 350px;
   }
 }
