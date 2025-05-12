@@ -41,17 +41,28 @@ const ChatWindow = () => {
     let currentSection = { type: 'text', content: [] };
 
     lines.forEach(line => {
-      if (line.startsWith('Flights:')) {
+      if (line.includes('Flight Options')) {
         if (currentSection.content.length > 0) {
           sections.push(currentSection);
         }
         currentSection = { type: 'flight', content: [] };
-      } else if (line.startsWith('Hotels:')) {
+      } else if (line.includes('Hotel Options')) {
         if (currentSection.content.length > 0) {
           sections.push(currentSection);
         }
         currentSection = { type: 'hotel', content: [] };
-      } else if (line.trim()) {
+      } else if (line.includes('itinerary')) {
+        if (currentSection.content.length > 0) {
+          sections.push(currentSection);
+        }
+        currentSection = { type: 'itinerary', content: [] };
+      }  else if (line.includes('Weather')) { 
+        if (currentSection.content.length > 0) {
+          sections.push(currentSection);
+        }
+        currentSection = { type: 'weather', content: [] };
+      } 
+      else if (line.trim()) {
         currentSection.content.push(line);
       }
     });
@@ -104,25 +115,38 @@ const ChatWindow = () => {
   const renderSection = (section) => {
     switch (section.type) {
       case 'flight':
+        let contentstring = "";
+        section.content.map((line)=>{
+          contentstring=contentstring+line;
+        });
+        const flightParts = contentstring.split(/\d+\.\s/).filter(part => part.trim() !== "");
+
         return (
-          <div className="section flight-section">
-            <h3>✈️ Flight Options</h3>
-            {section.content.map((line, idx) => (
-              <div key={idx} className="flight-option">
-                {line}
-              </div>
-            ))}
+          <div className="section-wrapper">
+            <h1>FLIGHT OPTIONS</h1>
+            <div className="flight-cards-grid">
+              {flightParts.map((flight, idx) => (
+                <FlightCard key={idx} flight={flight.trim()} />
+              ))}
+            </div>
           </div>
         );
+          
       case 'hotel':
+        let contentstringhotel = "";
+        section.content.map((line)=>{
+          contentstringhotel=contentstringhotel+line;
+        });
+        const hotelParts = contentstringhotel.split(/\d+\.\s/).filter(part => part.trim() !== "");
+
         return (
-          <div className="section hotel-section">
-            <h3>🏨 Hotel Options</h3>
-            {section.content.map((line, idx) => (
-              <div key={idx} className="hotel-option">
-                {line}
-              </div>
-            ))}
+          <div className="section-wrapper">
+            <h1>HOTEL OPTIONS</h1>
+            <div className="hotel-cards-grid">
+              {hotelParts.map((hotel, idx) => (
+                <HotelCard key={idx} hotel={hotel.trim()} />
+              ))}
+            </div>
           </div>
         );
       default:

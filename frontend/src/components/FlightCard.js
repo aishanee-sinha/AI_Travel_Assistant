@@ -3,12 +3,18 @@ import './FlightCard.css';
 
 const FlightCard = ({ flight }) => {
     // Extract flight details using regex
-    const airline = flight.match(/Airline: (.*?)(?:\n|$)/)?.[1] || 'N/A';
-    const departure = flight.match(/From: (.*?)(?:\n|$)/)?.[1] || 'N/A';
-    const arrival = flight.match(/To: (.*?)(?:\n|$)/)?.[1] || 'N/A';
-    const time = flight.match(/Time: (.*?)(?:\n|$)/)?.[1] || 'N/A';
-    const price = flight.match(/Price: (.*?)(?:\n|$)/)?.[1] || 'N/A';
-    const bookingLink = flight.match(/(https?:\/\/[^\s]+)/)?.[0];
+    // const airline = flight.match(/Airline: (.*?)(?:\n|$)/)?.[1] || 'N/A';
+    // const departure = flight.match(/From: (.*?)(?:\n|$)/)?.[1] || 'N/A';
+    // const arrival = flight.match(/To: (.*?)(?:\n|$)/)?.[1] || 'N/A';
+    // const time = flight.match(/Time: (.*?)(?:\n|$)/)?.[1] || 'N/A';
+    // const price = flight.match(/Price: (.*?)(?:\n|$)/)?.[1] || 'N/A';
+    // const bookingLink = flight.match(/(https?:\/\/[^\s]+)/)?.[0];
+    const airline = flight.slice(0,2);
+    const price = flight.match(/–\s+\$(\d+\.\d+)/)?.[1] || 'N/A';
+    const departure = flight.match(/🛫 Departs: .*?from\s+(\w+)/)?.[1] || 'N/A';
+    const arrival = flight.match(/🛬 Arrives: .*?at\s+(\w+)/)?.[1] || 'N/A';
+    const time = flight.match(/🛫 Departs: (.*?)\s+from/)?.[1] + ' - ' + flight.match(/🛬 Arrives: (.*?)\s+at/)?.[1] || 'N/A';
+    const bookingLink = flight.match(/🔗 \[Book here\]\((https?:\/\/[^\s]+)\)/)?.[1];
 
     return (
         <div className="flight-card fade-in">
@@ -17,7 +23,7 @@ const FlightCard = ({ flight }) => {
                     <span className="airline-icon">✈️</span>
                     <span className="airline-name">{airline}</span>
                 </div>
-                <div className="flight-price">{price}</div>
+                <div className="flight-price">${price}</div>
             </div>
 
             <div className="flight-route">

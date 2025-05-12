@@ -581,7 +581,13 @@ def chat_with_gemini(user_input):
                     )
                     
                     response_text = "Here's your complete travel plan:\n\n"
-                    
+                    itinerary = generate_itinerary_html(
+                            trip_context["destination"],
+                            trip_context["duration"],
+                            trip_context["interests"]
+                        )
+                    response_text = "Here's the itinerary for your trip:\n\n"
+                    response_text += itinerary + "\n\n"
                     # Add weather information
                     response_text += "🌤️ Weather Forecast:\n\n"
                     response_text += departure_weather + "\n"
