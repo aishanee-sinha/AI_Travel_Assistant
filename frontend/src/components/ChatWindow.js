@@ -34,6 +34,35 @@ const ChatWindow = () => {
     scrollToBottom();
   }, [messages]);
 
+  const processResponse = (response) => {
+    // Split response into sections based on headers
+    const sections = [];
+    const lines = response.split('\n');
+    let currentSection = { type: 'text', content: [] };
+
+    lines.forEach(line => {
+      if (line.startsWith('Flights:')) {
+        if (currentSection.content.length > 0) {
+          sections.push(currentSection);
+        }
+        currentSection = { type: 'flight', content: [] };
+      } else if (line.startsWith('Hotels:')) {
+        if (currentSection.content.length > 0) {
+          sections.push(currentSection);
+        }
+        currentSection = { type: 'hotel', content: [] };
+      } else if (line.trim()) {
+        currentSection.content.push(line);
+      }
+    });
+
+    if (currentSection.content.length > 0) {
+      sections.push(currentSection);
+    }
+
+    return sections;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -63,7 +92,7 @@ const ChatWindow = () => {
     } catch (error) {
       console.error('Error:', error);
       setMessages(prev => [...prev, {
-        text: "Sorry, I encountered an error. Please try again.",
+        text: [{ type: 'text', content: ["Sorry, I encountered an error. Please try again."] }],
         sender: 'assistant',
         error: true
       }]);
@@ -72,26 +101,39 @@ const ChatWindow = () => {
     }
   };
 
-  const processResponse = (response) => {
-    // Split by double newlines for sections
-    return response.split('\n\n').map(section => ({ content: section }));
-  };
-
-  // Render all assistant sections as single cards with HTML content
-  const renderStackedCards = (sections) => {
-    if (!sections.length) return null;
-    return (
-      <div className="stacked-cards-container">
-        {sections.map((section, idx) => (
-          <div key={idx} className="section-card fade-in-stacked">
-            <div
-              className="section-card-content"
-              dangerouslySetInnerHTML={{ __html: section.content }}
-            />
+  const renderSection = (section) => {
+    switch (section.type) {
+      case 'flight':
+        return (
+          <div className="section flight-section">
+            <h3>✈️ Flight Options</h3>
+            {section.content.map((line, idx) => (
+              <div key={idx} className="flight-option">
+                {line}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-    );
+        );
+      case 'hotel':
+        return (
+          <div className="section hotel-section">
+            <h3>🏨 Hotel Options</h3>
+            {section.content.map((line, idx) => (
+              <div key={idx} className="hotel-option">
+                {line}
+              </div>
+            ))}
+          </div>
+        );
+      default:
+        return (
+          <div className="section text-section">
+            {section.content.map((line, idx) => (
+              <p key={idx}>{line}</p>
+            ))}
+          </div>
+        );
+    }
   };
 
   const renderMessage = (message, msgIdx) => {
@@ -106,13 +148,20 @@ const ChatWindow = () => {
       );
     }
 
-    // Assistant message: clean stacked cards with HTML content
     return (
       <div className={`message assistant-message chat-bubble slide-in-left ${message.error ? 'error' : ''}`}>
         <div className="message-content">
-          {Array.isArray(message.text)
-            ? renderStackedCards(message.text)
-            : <div className="message-text">{message.text}</div>}
+          {Array.isArray(message.text) ? (
+            <div className="sections-container">
+              {message.text.map((section, idx) => (
+                <div key={idx} className="section-wrapper">
+                  {renderSection(section)}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="message-text">{message.text}</div>
+          )}
           <div className="message-time">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
         </div>
       </div>
@@ -123,7 +172,7 @@ const ChatWindow = () => {
     <div className="chat-container chat-gradient-bg">
       <div className="chat-header">
         <h2>Travel Assistant</h2>
-        <p>Ask me anything about travel planning!</p>
+        <p>Let's plan your perfect trip together!</p>
       </div>
 
       <div className="chat-messages">
@@ -151,7 +200,7 @@ const ChatWindow = () => {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
+          placeholder="Tell me about your travel plans..."
           ref={inputRef}
         />
         <button type="submit" disabled={isLoading}>

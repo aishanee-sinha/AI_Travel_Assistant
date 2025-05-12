@@ -7,6 +7,7 @@ from amadeus_api import get_flight_prices_with_links, resolve_city_to_code
 from hotel_api import get_hotel_prices_with_links
 import google.generativeai as genai
 from dateutil import parser
+import json
 
 # Load environment variables
 load_dotenv()
@@ -31,35 +32,56 @@ chat = model.start_chat()
 def normalize_date(date_str):
     """Use Gemini to normalize any date format into YYYY-MM-DD"""
     try:
+        # First try direct parsing with dateutil
+        try:
+            parsed_date = parser.parse(date_str)
+            formatted_date = parsed_date.strftime('%Y-%m-%d')
+            print(f"Successfully parsed date '{date_str}' to '{formatted_date}' using dateutil")
+            return formatted_date
+        except Exception as e:
+            print(f"Direct parsing failed for '{date_str}': {str(e)}")
+
+        # If direct parsing fails, try using Gemini
         prompt = (
             "Convert this date to YYYY-MM-DD format. "
             "If the year is not specified, use the current year. "
             "If the date is ambiguous or invalid, return 'invalid'. "
+            "For seasons like 'summer', use the start of that season in the current year. "
+            "Handle abbreviated months (e.g., 'aug' for August, 'jan' for January). "
+            "Handle various date formats like '28 aug', 'aug 28', '28th august', etc. "
             "Return ONLY the date in YYYY-MM-DD format, nothing else. "
             f"Date to normalize: {date_str}"
         )
         response = chat.send_message(prompt)
         normalized_date = response.text.strip()
-        # Validate the date format using datetime
+        print(f"Gemini normalized '{date_str}' to '{normalized_date}'")
+        
+        # Validate the normalized date
         try:
-            datetime.strptime(normalized_date, '%Y-%m-%d')
-            return normalized_date
-        except ValueError:
+            parsed_date = parser.parse(normalized_date)
+            formatted_date = parsed_date.strftime('%Y-%m-%d')
+            print(f"Successfully validated normalized date '{normalized_date}' to '{formatted_date}'")
+            return formatted_date
+        except Exception as e:
+            print(f"Error validating normalized date '{normalized_date}': {str(e)}")
             return "invalid"
     except Exception as e:
-        print(f"Error normalizing date: {str(e)}")
+        print(f"Error in normalize_date: {str(e)}")
         return "invalid"
 
 def initialize_chat():
     instruction = (
-        "You are a friendly and interactive travel assistant. Your goal is to help users plan their trips "
-        "by asking relevant questions and gathering necessary information. Follow these guidelines:\n"
-        "1. Start by asking about their destination and travel dates\n"
-        "2. Then ask about their interests and preferences\n"
-        "3. Ask about their budget and accommodation preferences\n"
-        "4. Finally, ask about their origin city for flight options\n"
-        "Keep the conversation natural and engaging. Ask one question at a time and acknowledge their responses.\n"
-        "Your goal is to fill trip_context = {"
+        "You are a friendly and knowledgeable travel planning assistant. Your goal is to help users plan their trips "
+        "through natural conversation. Follow these guidelines:\n"
+        "1. Engage in natural, conversational dialogue\n"
+        "2. Ask relevant questions one at a time\n"
+        "3. Show empathy and understanding of user preferences\n"
+        "4. Provide personalized recommendations based on user interests\n"
+        "5. When you have enough information, suggest specific activities and attractions\n"
+        "6. Always maintain context of the conversation\n"
+        "7. Be proactive in suggesting options but let the user make decisions\n"
+        "8. When discussing flights and hotels, mention that you'll provide real-time options\n"
+        "Your goal is to gather trip_context = {"
         "origin: [city name]"
         "destination: [city name]"
         "departure_date: [date in YYYY-MM-DD format]"
@@ -71,7 +93,7 @@ def initialize_chat():
         "}"
     )
     chat.send_message(instruction)
-    return "Hi! I'm your travel planning assistant. Where would you like to go?"
+    return "Hi! I'm your travel planning assistant. I'd love to help you plan your perfect trip. Where would you like to go?"
 
 def generate_itinerary(destination, duration, interests=""):
     prompt = (
@@ -87,11 +109,12 @@ def generate_itinerary(destination, duration, interests=""):
 def generate_itinerary_html(destination, duration, interests=""):
     prompt = (
         f"Create a detailed {duration}-day itinerary for {destination}. "
-        f"Break it down day by day. For each day, start with an emoji and a bolded title, e.g., '<span>📅 <strong>Day 1: City Name</strong></span>'. "
-        f"For each day, use nested bullet points for morning, afternoon, and evening activities, using <ul> and <li> tags. "
-        f"Use <strong> for subheadings like 'Morning', 'Lunch', etc. "
-        f"Format the entire itinerary as HTML. Do NOT use Markdown. "
-        f"Return only the HTML, no explanations. "
+        f"Break it down day by day. For each day, start with an emoji and a bolded title, e.g., 'Day 1: City Name'. "
+        f"For each day, use bullet points for morning, afternoon, and evening activities. "
+        f"Use clear section headers for each part of the day. "
+        f"Format the entire itinerary as plain text with clear sections and bullet points. "
+        f"Do NOT use HTML tags. "
+        f"Return only the formatted text, no explanations. "
         f"Consider these interests: {interests}. "
         "Include major attractions, local experiences, and dining recommendations."
     )
@@ -120,132 +143,166 @@ def generate_hotels_html(destination, checkin, checkout):
 def generate_tips_html(destination):
     prompt = (
         f"Give travel tips for {destination}. "
-        "Start with an emoji and a bolded title, e.g., '<span>🚕 <strong>Transportation & Tips</strong></span>'. "
-        "List tips as bullet points, using <ul> and <li> tags. "
-        "Use <strong> for key words (e.g., 'MetroCard', 'Packing'). "
-        "Format the entire response as HTML. Do NOT use Markdown. "
-        "Return only the HTML, no explanations."
+        "Start with an emoji and a bolded title for each section. "
+        "List tips as bullet points. "
+        "Use clear section headers for different types of tips. "
+        "Format the entire response as plain text with clear sections and bullet points. "
+        "Do NOT use HTML tags. "
+        "Return only the formatted text, no explanations."
     )
     response = chat.send_message(prompt)
     return response.text
+
+def is_greeting(text):
+    """Check if the input is a greeting"""
+    greeting_prompt = (
+        "Determine if this is a greeting or introduction (like 'hello', 'hi', 'hey', etc.). "
+        "Return 'yes' if it is, 'no' if it's not. "
+        f"Text to check: {text}"
+    )
+    try:
+        response = chat.send_message(greeting_prompt)
+        return "yes" in response.text.lower()
+    except Exception as e:
+        print(f"Error checking greeting: {str(e)}")
+        return False
+
+def is_valid_city(text):
+    """Check if the input could be a valid city name"""
+    city_prompt = (
+        "Determine if this could be a valid city name. "
+        "Return 'yes' if it could be a city name, 'no' if it's definitely not. "
+        "Consider common city names, but also allow for less common ones. "
+        "Return 'no' for greetings, numbers, or clearly non-city words. "
+        f"Text to check: {text}"
+    )
+    try:
+        response = chat.send_message(city_prompt)
+        return "yes" in response.text.lower()
+    except Exception as e:
+        print(f"Error checking city: {str(e)}")
+        return False
 
 def extract_trip_context(user_input):
     # Initialize context with current values
     context = trip_context.copy()
     
-    # Only try to extract date if we don't have one yet
-    if not context["departure_date"]:
-        date_prompt = (
-            "Given the current date and the user's message, determine the exact date they want to travel. "
-            "If they mention a relative date (like 'next month'), calculate the actual date. "
-            "If they mention a date without a year, use the current year. "
-            "If there is no date information, return 'no_date'. "
-            "Return ONLY the date in YYYY-MM-DD format or 'no_date', nothing else. "
-            f"Current date: {datetime.now().strftime('%Y-%m-%d')}\n"
-            f"User message: {user_input}"
-        )
-        
-        try:
-            date_response = chat.send_message(date_prompt)
-            departure_date = date_response.text.strip()
-            
-            if departure_date != 'no_date':
-                # Validate the date
-                try:
-                    parsed_date = datetime.strptime(departure_date, '%Y-%m-%d')
-                    # Don't allow dates more than 1 year in advance
-                    max_date = datetime.now() + timedelta(days=365)
-                    if parsed_date > max_date:
-                        parsed_date = max_date
-                    context["departure_date"] = parsed_date.strftime('%Y-%m-%d')
-                except ValueError:
-                    print(f"Invalid date format from Gemini: {departure_date}")
-        except Exception as e:
-            print(f"Error extracting date: {str(e)}")
+    # Check if this is a greeting
+    if is_greeting(user_input):
+        print("Detected greeting, not updating context")
+        return context
     
-    # If we're specifically asking for duration, use a focused prompt
-    if not context["duration"] and context["departure_date"]:
-        duration_prompt = (
-            "Extract the number of days from the user's message. "
-            "Return ONLY the number, nothing else. "
-            "If no number is found, return 'no_duration'. "
-            f"User message: {user_input}"
-        )
-        try:
-            duration_response = chat.send_message(duration_prompt)
-            duration = duration_response.text.strip()
-            if duration.isdigit():
-                context["duration"] = duration
-                if context["departure_date"]:
-                    context["return_date"] = calculate_return_date(context["departure_date"], context["duration"])
-                return context
-        except Exception as e:
-            print(f"Error extracting duration: {str(e)}")
+    # Check if this might be a date
+    if any(month in user_input.lower() for month in ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']):
+        print(f"Detected potential date input: {user_input}")
+        normalized_date = normalize_date(user_input)
+        if normalized_date != "invalid":
+            # If we already have a departure date, this must be the return date
+            if context["departure_date"]:
+                context["return_date"] = normalized_date
+                print(f"Updated return_date to {normalized_date}")
+            else:
+                context["departure_date"] = normalized_date
+                print(f"Updated departure_date to {normalized_date}")
+            return context
     
-    # If we're specifically asking for origin city, use a focused prompt
-    if not context["origin"] and context["destination"]:
-        origin_prompt = (
-            "The user is providing their starting city. "
-            "Extract ONLY the city name from their message. "
-            "Remove any words like 'city', 'town', etc. "
-            "Return ONLY the city name, nothing else. "
-            "If no city is found, return 'no_city'. "
-            f"User message: {user_input}"
-        )
-        try:
-            origin_response = chat.send_message(origin_prompt)
-            origin = origin_response.text.strip()
-            if origin and origin != 'no_city':
-                context["origin"] = origin
-                return context
-        except Exception as e:
-            print(f"Error extracting origin: {str(e)}")
-    
-    # For other information, use the general extraction prompt
+    # Use Gemini to extract information from user input
     extraction_prompt = (
-        "Extract travel information from the user's message. Be specific about:\n"
-        "1. Destination: The city or place they want to visit\n"
-        "2. Duration: Number of days they want to stay\n"
-        "3. Origin: Their starting city\n"
-        "4. Budget: Their budget range or preferences\n"
-        "5. Accommodation: Their hotel preferences (luxury, budget, etc.)\n"
-        "6. Interests: Their interests (culture, food, adventure, etc.)\n\n"
-        "Return the result in this format:\n"
-        "destination: [city name]\n"
-        "duration: [number only]\n"
-        "origin: [city name]\n"
-        "budget: [amount]\n"
-        "accommodation: [preference]\n"
-        "interests: [interests]\n\n"
+        "Extract travel planning information from the user's message. "
+        "Return a JSON object with the following fields if found: "
+        "origin, destination, departure_date, return_date, budget, accommodation, interests, duration. "
+        "Only include fields that are explicitly mentioned or can be reasonably inferred. "
+        "For dates, understand natural language expressions like 'next week', 'in 2 months', 'end of summer', etc. "
+        "Also handle various date formats like '28 aug', 'aug 28', '28th august', etc. "
+        "Convert all dates to YYYY-MM-DD format. "
+        "For budget, extract the numerical value. "
+        "For duration, extract only the number. "
+        "If a field is not mentioned, do not include it in the response. "
+        "Format the response as a valid JSON object without any markdown formatting. "
+        "If the message is just 'correct' or similar acknowledgment, return an empty JSON object. "
+        "IMPORTANT: If the message is a single word or short phrase that could be a city name, and we already have a destination but no origin, treat it as the origin city. "
         f"User message: {user_input}"
     )
     
     try:
-        extraction_response = chat.send_message(extraction_prompt)
-        extracted = extraction_response.text.strip()
+        response = chat.send_message(extraction_prompt)
+        extracted_data = response.text.strip()
+        print(f"Extracted data: {extracted_data}")
         
-        # Parse the extracted information
-        for line in extracted.split('\n'):
-            if ':' in line:
-                key, value = line.split(':', 1)
-                key = key.strip().lower()
-                value = value.strip()
-                
-                if key in context and value:
-                    if key == 'duration':
-                        if value.isdigit():
-                            context[key] = value
-                            if context["departure_date"]:
-                                context["return_date"] = calculate_return_date(context["departure_date"], context["duration"])
-                    elif key == 'origin':
-                        context[key] = value
+        # Remove any markdown formatting
+        extracted_data = extracted_data.replace('```json', '').replace('```', '').strip()
+        
+        # Parse the JSON response
+        try:
+            data = json.loads(extracted_data)
+            print(f"Parsed JSON data: {data}")
+            
+            # If the input is a single word or short phrase, check if it could be a city
+            if not data and len(user_input.split()) <= 2:
+                if is_valid_city(user_input):
+                    # If we have a destination but no origin, treat this as origin
+                    if context["destination"] and not context["origin"]:
+                        data = {"origin": user_input.strip()}
+                        print(f"Treated '{user_input}' as origin city")
+                    # If we have no destination, treat this as destination
+                    elif not context["destination"]:
+                        data = {"destination": user_input.strip()}
+                        print(f"Treated '{user_input}' as destination city")
                     else:
-                        context[key] = value
-                        
+                        print(f"'{user_input}' could be a city but context is unclear")
+            
+            # Update context with extracted values
+            for key in context:
+                if key in data and data[key]:
+                    if key == 'duration':
+                        # Ensure duration is a string number
+                        if str(data[key]).isdigit():
+                            context[key] = str(data[key])
+                            print(f"Updated {key} to {data[key]}")
+                    elif key in ['departure_date', 'return_date']:
+                        # Normalize dates
+                        normalized_date = normalize_date(data[key])
+                        if normalized_date != "invalid":
+                            context[key] = normalized_date
+                            print(f"Updated {key} to {normalized_date}")
+                    else:
+                        context[key] = str(data[key])
+                        print(f"Updated {key} to {data[key]}")
+            
+            # If we have a departure date and duration, calculate return date
+            if context["departure_date"] and context["duration"] and not context["return_date"]:
+                context["return_date"] = calculate_return_date(context["departure_date"], context["duration"])
+                print(f"Calculated return date: {context['return_date']}")
+                
+        except json.JSONDecodeError as e:
+            print(f"Error parsing JSON response: {extracted_data}")
+            print(f"JSON Error: {str(e)}")
+            # If we can't parse the JSON and input could be a city
+            if len(user_input.split()) <= 2 and is_valid_city(user_input):
+                # If we have a destination but no origin, treat this as origin
+                if context["destination"] and not context["origin"]:
+                    context["origin"] = user_input.strip()
+                    print(f"Treated '{user_input}' as origin city")
+                # If we have no destination, treat this as destination
+                elif not context["destination"]:
+                    context["destination"] = user_input.strip()
+                    print(f"Treated '{user_input}' as destination city")
+            return context
+            
+        return context
     except Exception as e:
-        print(f"Error in extraction: {str(e)}")
-    
-    return context
+        print(f"Error extracting context: {str(e)}")
+        # If there's an error and input could be a city
+        if len(user_input.split()) <= 2 and is_valid_city(user_input):
+            # If we have a destination but no origin, treat this as origin
+            if context["destination"] and not context["origin"]:
+                context["origin"] = user_input.strip()
+                print(f"Treated '{user_input}' as origin city")
+            # If we have no destination, treat this as destination
+            elif not context["destination"]:
+                context["destination"] = user_input.strip()
+                print(f"Treated '{user_input}' as destination city")
+        return context
 
 def calculate_return_date(departure_date, duration):
     try:
@@ -277,106 +334,292 @@ def handle_follow_up(user_input):
     except Exception as e:
         return f"Sorry, I encountered an error: {str(e)}. Please try again."
 
+def reset_trip_context():
+    """Reset all trip context values to empty strings"""
+    global trip_context
+    trip_context = {
+        "origin": "",
+        "destination": "",
+        "departure_date": "",
+        "return_date": "",
+        "budget": "",
+        "accommodation": "",
+        "interests": "",
+        "duration": ""
+    }
+    print("Trip context has been reset")
+    return "I've cleared the previous trip details. Let's plan a new trip! Where would you like to go?"
+
+def is_reset_request(text):
+    """Check if the user wants to reset/start a new trip"""
+    reset_phrases = [
+        "new trip",
+        "start over",
+        "reset",
+        "clear",
+        "plan another trip",
+        "different trip",
+        "let's plan something else"
+    ]
+    return any(phrase in text.lower() for phrase in reset_phrases)
+
+def parse_user_intent(user_input):
+    """Use Gemini to parse user intent and extract relevant information"""
+    prompt = (
+        "You are a travel planning assistant. Analyze this user message and return a JSON object with the following structure. "
+        "IMPORTANT: Return ONLY the JSON object, no other text or explanation.\n"
+        "{\n"
+        "  'intent': 'greeting' | 'reset' | 'provide_info' | 'question' | 'continue',\n"
+        "  'is_greeting': boolean,\n"
+        "  'is_reset': boolean,\n"
+        "  'extracted_info': {\n"
+        "    'origin': string | null,\n"
+        "    'destination': string | null,\n"
+        "    'departure_date': string | null,\n"
+        "    'return_date': string | null,\n"
+        "    'duration': string | null,\n"
+        "    'budget': string | null,\n"
+        "    'interests': string | null,\n"
+        "    'accommodation': string | null\n"
+        "  },\n"
+        "  'missing_info': string[],\n"
+        "  'next_question': string\n"
+        "}\n\n"
+        "Rules:\n"
+        "1. For dates, convert to YYYY-MM-DD format\n"
+        "2. For intent detection:\n"
+        "   - 'greeting': hello, hi, hey, etc.\n"
+        "   - 'reset': new trip, start over, reset, clear, etc.\n"
+        "   - 'provide_info': when user provides any trip details\n"
+        "   - 'question': when user asks about the trip\n"
+        "   - 'continue': when user wants to proceed with planning\n"
+        "3. For missing_info, list only the required fields that are still missing\n"
+        "4. For next_question, provide a natural follow-up question\n"
+        "5. Maintain context from previous messages\n\n"
+        f"Current trip context: {json.dumps(trip_context, indent=2)}\n\n"
+        f"User message: {user_input}\n\n"
+        "Return ONLY the JSON object, no other text."
+    )
+    
+    try:
+        response = chat.send_message(prompt)
+        response_text = response.text.strip()
+        
+        # Clean up the response to ensure it's valid JSON
+        response_text = response_text.replace('```json', '').replace('```', '').strip()
+        
+        # If the response starts with a newline or whitespace, remove it
+        response_text = response_text.lstrip()
+        
+        # If the response is empty or not valid JSON, return default response
+        if not response_text:
+            raise ValueError("Empty response from Gemini")
+            
+        parsed_data = json.loads(response_text)
+        print(f"Parsed user intent: {parsed_data}")
+        
+        # Validate the parsed data has all required fields
+        required_fields = ['intent', 'is_greeting', 'is_reset', 'extracted_info', 'missing_info', 'next_question']
+        if not all(field in parsed_data for field in required_fields):
+            raise ValueError("Missing required fields in parsed data")
+            
+        # Maintain existing context for fields that aren't being updated
+        for key in trip_context:
+            if key in parsed_data['extracted_info'] and parsed_data['extracted_info'][key] is None:
+                parsed_data['extracted_info'][key] = trip_context[key]
+            
+        return parsed_data
+        
+    except Exception as e:
+        print(f"Error parsing user intent: {str(e)}")
+        # Return a default response based on the input and current context
+        if user_input.lower() in ['hello', 'hi', 'hey', 'yo']:
+            return {
+                "intent": "greeting",
+                "is_greeting": True,
+                "is_reset": False,
+                "extracted_info": {},
+                "missing_info": ["destination"],
+                "next_question": "Hi! I'm your travel planning assistant. Where would you like to go?"
+            }
+        elif len(user_input.split()) <= 2:  # Single word or short phrase
+            if not trip_context["destination"]:
+                return {
+                    "intent": "provide_info",
+                    "is_greeting": False,
+                    "is_reset": False,
+                    "extracted_info": {"destination": user_input.strip()},
+                    "missing_info": ["origin"],
+                    "next_question": f"Great! You want to visit {user_input.strip()}. Which city will you be traveling from?"
+                }
+            elif not trip_context["origin"]:
+                return {
+                    "intent": "provide_info",
+                    "is_greeting": False,
+                    "is_reset": False,
+                    "extracted_info": {"origin": user_input.strip()},
+                    "missing_info": ["departure_date"],
+                    "next_question": "When would you like to start your trip?"
+                }
+            else:
+                return {
+                    "intent": "provide_info",
+                    "is_greeting": False,
+                    "is_reset": False,
+                    "extracted_info": {},
+                    "missing_info": ["departure_date"],
+                    "next_question": "When would you like to start your trip?"
+                }
+        else:
+            return {
+                "intent": "provide_info",
+                "is_greeting": False,
+                "is_reset": False,
+                "extracted_info": {},
+                "missing_info": ["destination"],
+                "next_question": "Where would you like to go?"
+            }
+
 def chat_with_gemini(user_input):
     try:
-        # Extract trip context from user input while maintaining previous context
-        extracted_context = extract_trip_context(user_input)
+        # Parse user intent using Gemini
+        parsed_intent = parse_user_intent(user_input)
         
-        # Update trip context with extracted values
-        for key in trip_context:
-            if extracted_context[key]:
-                trip_context[key] = extracted_context[key]
-
+        # Handle reset intent
+        if parsed_intent["is_reset"]:
+            return reset_trip_context()
+        
+        # Handle greeting intent
+        if parsed_intent["is_greeting"]:
+            return "Hi! I'm your travel planning assistant. Where would you like to go?"
+        
+        # Update trip context with extracted information
+        if parsed_intent["extracted_info"]:
+            for key, value in parsed_intent["extracted_info"].items():
+                if value:
+                    trip_context[key] = value
+                    print(f"Updated trip_context[{key}] to {value}")
+        
         print("\U0001F4E6 Current Trip Context:", trip_context)
-
-        # If this is the first message, start with a friendly greeting
-        if not any(trip_context.values()):
-            return "Hi! I'm your travel planning assistant. I'd love to help you plan your trip. Where would you like to go?"
-
-        # Define priority order for information gathering
-        priority_order = ["destination", "departure_date", "duration", "origin", "interests", "budget", "accommodation"]
         
-        # Check what information we have and what we need next
-        for info in priority_order:
-            if not trip_context[info]:
-                # Create a friendly, specific question based on what we need
-                if info == "destination":
-                    return "Where would you like to go for your trip?"
-                elif info == "departure_date":
-                    return "When would you like to start your trip? You can say something like 'next month' or give a specific date."
-                elif info == "duration":
-                    return "How many days would you like to stay?"
-                elif info == "origin":
-                    return "Which city will you be traveling from?"
-                elif info == "interests":
-                    return "What are your interests? For example, are you interested in culture, food, shopping, or something else?"
-                elif info == "budget":
-                    return "What's your budget for this trip? Are you looking for luxury, mid-range, or budget options?"
-                elif info == "accommodation":
-                    return "What type of accommodation do you prefer? For example, hotels, hostels, or vacation rentals?"
-
-        # If we have all information, provide a complete plan
-        if all(trip_context.values()):
-            # Get flight options
-            origin_code = resolve_city_to_code(trip_context["origin"])
-            destination_code = resolve_city_to_code(trip_context["destination"])
-            flights = get_flight_prices_with_links(
-                origin_code, destination_code, trip_context["departure_date"]
-            )
+        # Check if we have all required information
+        required_fields = ["origin", "destination", "departure_date"]
+        has_all_required = all(trip_context[field] for field in required_fields)
+        
+        if has_all_required:
+            # Check if we have either return date or duration
+            if not trip_context["return_date"] and not trip_context["duration"]:
+                return "Would you like to specify your return date or trip duration? (e.g., 'return on 28 june' or 'stay for 7 days')"
             
-            # Get hotel options
-            hotels = get_hotel_prices_with_links(
-                trip_context["destination"],
-                trip_context["departure_date"],
-                trip_context["return_date"],
-            )
+            # Check if we have all optional information
+            optional_fields = ["budget", "interests", "accommodation"]
+            has_all_optional = all(trip_context[field] for field in optional_fields)
             
-            # Generate itinerary
-            itinerary = generate_itinerary(trip_context["destination"], trip_context["duration"], trip_context["interests"])
-            
-            return (
-                f"Perfect! I've prepared a complete travel plan for your trip to {trip_context['destination']}:\n\n"
-                f"Flight options from {trip_context['origin']} to {trip_context['destination']}:\n\n" + "\n".join(flights) + "\n\n"
-                f"Hotel options in {trip_context['destination']}:\n\n" + "\n".join(hotels) + "\n\n"
-                f"{trip_context['duration']}-day itinerary:\n\n{itinerary}\n\n"
-                "Would you like to make any changes to this plan?"
-            )
-
-        # If we have partial information, provide what we can and ask for more
-        response = ""
-        if trip_context["destination"] and trip_context["duration"]:
-            itinerary = generate_itinerary(trip_context["destination"], trip_context["duration"], trip_context["interests"])
-            response += f"Great! I've started planning your {trip_context['duration']}-day trip to {trip_context['destination']}.\n\n"
-            response += f"Here's a preliminary itinerary:\n\n{itinerary}\n\n"
+            if not has_all_optional:
+                # Use Gemini's next question
+                return parsed_intent["next_question"]
+            else:
+                # We have all information, generate the complete plan
+                try:
+                    # Calculate return date if we have duration but no return date
+                    if trip_context["duration"] and not trip_context["return_date"]:
+                        trip_context["return_date"] = calculate_return_date(trip_context["departure_date"], trip_context["duration"])
+                        print(f"Calculated return date: {trip_context['return_date']}")
+                    
+                    # Get flight options
+                    flights = get_flight_prices_with_links(
+                        trip_context["origin"],
+                        trip_context["destination"],
+                        trip_context["departure_date"]
+                    )
+                    
+                    # Build complete response
+                    response_text = "Here's your complete travel plan:\n\n"
+                    
+                    # Add flights
+                    if flights:
+                        response_text += "✈️ Flight Options:\n\n"
+                        for flight in flights:
+                            response_text += flight + "\n"
+                        response_text += "\n"
+                    else:
+                        # No flights found - provide alternative options
+                        response_text += "✈️ Flight Options:\n\n"
+                        response_text += "❌ No direct flights found from {} to {} on {}.\n\n".format(
+                            trip_context["origin"],
+                            trip_context["destination"],
+                            trip_context["departure_date"]
+                        )
+                        response_text += "Here are some alternative options:\n\n"
+                        response_text += "1. Try nearby airports:\n"
+                        response_text += "   - For {}: Consider alternative airports in the region\n".format(trip_context["origin"])
+                        response_text += "   - For {}: Check if there are other airports serving the area\n\n".format(trip_context["destination"])
+                        response_text += "2. Adjust your dates:\n"
+                        response_text += "   - Try dates a few days before or after your planned departure\n"
+                        response_text += "   - Consider different seasons for better availability\n\n"
+                        response_text += "3. Alternative routes:\n"
+                        response_text += "   - Look for connecting flights through major hubs\n"
+                        response_text += "   - Consider multi-city options\n\n"
+                        response_text += "4. Other transportation options:\n"
+                        response_text += "   - Check train services if available\n"
+                        response_text += "   - Look into bus services for regional travel\n"
+                        response_text += "   - Consider car rental options\n\n"
+                        response_text += "Would you like me to:\n"
+                        response_text += "1. Search for flights on alternative dates?\n"
+                        response_text += "2. Look for flights from/to nearby airports?\n"
+                        response_text += "3. Search for connecting flights?\n"
+                        response_text += "4. Continue with the rest of the plan?\n\n"
+                    
+                    # Get hotel options
+                    hotels = get_hotel_prices_with_links(
+                        trip_context["destination"],
+                        trip_context["departure_date"],
+                        trip_context["return_date"]
+                    )
+                    
+                    # Add hotels
+                    if hotels:
+                        response_text += "🏨 Hotel Options:\n\n"
+                        for hotel in hotels:
+                            response_text += hotel + "\n"
+                        response_text += "\n"
+                    else:
+                        response_text += "🏨 Hotel Options:\n\n"
+                        response_text += "❌ No hotels found for your dates. Consider:\n"
+                        response_text += "1. Adjusting your travel dates\n"
+                        response_text += "2. Looking for accommodations in nearby areas\n"
+                        response_text += "3. Checking alternative booking platforms\n\n"
+                    
+                    # Generate itinerary
+                    itinerary = generate_itinerary_html(
+                        trip_context["destination"],
+                        trip_context["duration"] or "7",  # Default to 7 days if duration not specified
+                        trip_context["interests"]
+                    )
+                    
+                    # Generate travel tips
+                    tips = generate_tips_html(trip_context["destination"])
+                    
+                    # Add itinerary
+                    response_text += "📅 Your Itinerary:\n\n" + itinerary + "\n\n"
+                    
+                    # Add travel tips
+                    response_text += "💡 Travel Tips:\n\n" + tips
+                    
+                    # Add option to plan another trip
+                    response_text += "\n\nWould you like to plan another trip? Just say 'new trip' or 'start over' to begin planning a different journey!"
+                    
+                except Exception as e:
+                    print(f"Error getting real-time data: {str(e)}")
+                    response_text = "I apologize, but I'm having trouble fetching real-time flight and hotel options at the moment."
+        else:
+            # Use Gemini's next question for missing information
+            return parsed_intent["next_question"]
         
-        if trip_context["destination"] and trip_context["departure_date"]:
-            hotels = get_hotel_prices_with_links(
-                trip_context["destination"],
-                trip_context["departure_date"],
-                trip_context["return_date"],
-            )
-            response += f"I've found some hotel options for your stay:\n\n" + "\n".join(hotels) + "\n\n"
+        return response_text
         
-        # Find the next piece of information we need
-        for info in priority_order:
-            if not trip_context[info]:
-                if info == "departure_date":
-                    response += "When would you like to start your trip? You can say something like 'next month' or give a specific date."
-                elif info == "duration":
-                    response += "How many days would you like to stay?"
-                elif info == "origin":
-                    response += "Which city will you be traveling from?"
-                elif info == "interests":
-                    response += "What are your interests? For example, are you interested in culture, food, shopping, or something else?"
-                elif info == "budget":
-                    response += "What's your budget for this trip? Are you looking for luxury, mid-range, or budget options?"
-                elif info == "accommodation":
-                    response += "What type of accommodation do you prefer? For example, hotels, hostels, or vacation rentals?"
-                break
-        
-        return response
-
     except Exception as e:
+        print(f"Error in chat_with_gemini: {str(e)}")
         return f"Sorry, I encountered an error: {str(e)}. Please try again with your travel details."
 
 def main():
