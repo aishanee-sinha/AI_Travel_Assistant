@@ -1004,28 +1004,75 @@ def chat_with_gemini(user_input):
                 )
                 weather_info = f"Departure: {departure_weather}\nReturn: {return_weather}"
                 
-                # Create RAG context
-                rag_context = create_rag_context(
-                    flights,
-                    hotels,
-                    weather_info,
-                    trip_context["destination"],
-                    trip_context["duration"],
-                    trip_context["interests"]
-                )
-                
-                # Generate personalized itinerary using RAG
-                itinerary = generate_rag_itinerary(rag_context)
-                
-                # Format complete response
-                response_text = format_rag_response(itinerary, flights, hotels, weather_info)
-                
-            except Exception as e:
-                print(f"Error fetching data: {str(e)}")
-                response_text = "❌ Unable to fetch some data at the moment.\n"
-                response_text += "Please try again later."
-            
-            return response_text
+
+                # Get weather information
+                try:
+                    departure_weather = get_weather_climatology(
+                        trip_context["destination"],
+                        trip_context["departure_date"]
+                    )
+                    return_weather = get_weather_climatology(
+                        trip_context["destination"],
+                        trip_context["return_date"]
+                    )
+                    
+                    response_text = "Here's your complete travel plan:\n\n"
+                    itinerary = generate_itinerary_html(
+                            trip_context["destination"],
+                            trip_context["duration"],
+                            trip_context["interests"]
+                        )
+                    response_text = "Here's the itinerary for your trip:\n\n"
+                    response_text += itinerary + "\n\n"
+                    # Add weather information
+                    response_text += "🌤️ Weather Forecast:\n\n"
+                    response_text += departure_weather + "\n"
+                    response_text += return_weather + "\n\n"
+                    
+                    # Add flight options
+                    if flights:
+                        response_text += "✈️ Flight Options:\n\n"
+                        for flight in flights:
+                            response_text += flight + "\n"
+                        response_text += "\n"
+                    else:
+                        response_text += "❌ No direct flights found for your dates.\n\n"
+                    
+                    # Add hotel options
+                    if hotels:
+                        response_text += "🏨 Hotel Options:\n\n"
+                        for hotel in hotels:
+                            response_text += hotel + "\n"
+                        response_text += "\n"
+                    else:
+                        response_text += "❌ No hotels found for your dates.\n\n"
+                    
+                    # Stage 4: Ask about interests for revised itinerary
+                    if not trip_context.get("interests"):
+                        response_text += "Please let me know your interests and preferences and I can customize the itinerary accordingly."
+                    else:
+                        # Stage 5: Generate revised itinerary with interests
+                        revised_itinerary = generate_itinerary_html(
+                            trip_context["destination"],
+                            trip_context["duration"],
+                            trip_context["interests"]
+                        )
+                        response_text += "Here's your revised itinerary based on your interests:\n\n"
+                        response_text += revised_itinerary
+                    
+                    return response_text
+                    
+                except Exception as e:
+                    print(f"Error fetching data: {str(e)}")
+                    response_text += "❌ Unable to fetch some data at the moment.\n"
+                    return response_text
+        
+        # If we don't have destination or duration, ask for them
+        if not trip_context["destination"]:
+            return "Where would you like to go?"
+        if not trip_context["duration"]:
+            return f"How many days would you like to stay in {trip_context['destination']}?"
+
         
         # If we're missing any required information, use Gemini's next question
         return parsed_intent["next_question"]

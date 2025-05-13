@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './ChatWindow.css';
 import FlightCard from './FlightCard';
 import HotelCard from './HotelCard';
+import ItineraryPDF from './ItineraryPDF';
 
 const SECTION_ICONS = {
   itinerary: '🗓️',
@@ -23,16 +25,89 @@ const ChatWindow = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(true);
+  const [userName, setUserName] = useState('Traveler');  
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-
+  const navigate = useNavigate();
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Load chat history when component mounts
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const storedName = localStorage.getItem('userName');
+    console.log(storedName);
+    if (storedName) {
+      setUserName(storedName);
+    }
+
+    if (token) {
+      fetchChatHistory(token);
+    } else {
+      setIsHistoryLoading(false);
+    }
+  }, []);
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+  const fetchChatHistory = async (token) => {
+    try {
+      setIsHistoryLoading(true);
+      const response = await fetch(`http://localhost:8000/api/chat-history?token=${token}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to load chat history');
+      }
+
+      const data = await response.json();
+
+      if (data.messages && data.messages.length > 0) {
+        // Convert API response to message format used in component
+        const formattedMessages = data.messages.map(msg => {
+          if (msg.sender === 'user') {
+            return {
+              text: msg.content,
+              sender: 'user',
+              timestamp: new Date(msg.timestamp)
+            };
+          } else {
+            // Try to parse bot responses as sections if possible
+            try {
+              const sections = processResponse(msg.content);
+              return {
+                text: sections,
+                sender: 'assistant',
+                timestamp: new Date(msg.timestamp)
+              };
+            } catch (e) {
+              // Fallback to plain text if parsing fails
+              return {
+                text: msg.content,
+                sender: 'assistant',
+                timestamp: new Date(msg.timestamp)
+              };
+            }
+          }
+        });
+
+        setMessages(formattedMessages);
+      }
+    } catch (error) {
+      console.error('Error loading chat history:', error);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    // Remove token and user info from local storage
+    localStorage.removeItem('token');
+    localStorage.removeItem('userName');
+    // Redirect to login page
+    navigate('/login');
+  };
 
   const processResponse = (response) => {
     // Split response into sections based on headers
@@ -41,17 +116,28 @@ const ChatWindow = () => {
     let currentSection = { type: 'text', content: [] };
 
     lines.forEach(line => {
-      if (line.startsWith('Flights:')) {
+      if (line.includes('Flight Options')) {
         if (currentSection.content.length > 0) {
           sections.push(currentSection);
         }
         currentSection = { type: 'flight', content: [] };
-      } else if (line.startsWith('Hotels:')) {
+      } else if (line.includes('Hotel Options')) {
         if (currentSection.content.length > 0) {
           sections.push(currentSection);
         }
         currentSection = { type: 'hotel', content: [] };
-      } else if (line.trim()) {
+      } else if (line.includes('itinerary')) {
+        if (currentSection.content.length > 0) {
+          sections.push(currentSection);
+        }
+        currentSection = { type: 'itinerary', content: [] };
+      }  else if (line.includes('Weather')) { 
+        if (currentSection.content.length > 0) {
+          sections.push(currentSection);
+        }
+        currentSection = { type: 'weather', content: [] };
+      } 
+      else if (line.trim()) {
         currentSection.content.push(line);
       }
     });
@@ -74,12 +160,17 @@ const ChatWindow = () => {
     setMessages(prev => [...prev, { text: userMessage, sender: 'user' }]);
 
     try {
+      // Get token from localStorage
+      const token = localStorage.getItem('token');
       const response = await fetch('http://localhost:8000/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({
+          message: userMessage,
+          token: token // Send token with each request
+        }),
       });
 
       if (!response.ok) {
@@ -104,27 +195,101 @@ const ChatWindow = () => {
   const renderSection = (section) => {
     switch (section.type) {
       case 'flight':
+        let contentstring = "";
+        section.content.map((line)=>{
+          contentstring=contentstring+line;
+        });
+        const flightParts = contentstring.split(/\d+\.\s/).filter(part => part.trim() !== "");
+
         return (
-          <div className="section flight-section">
-            <h3>✈️ Flight Options</h3>
-            {section.content.map((line, idx) => (
-              <div key={idx} className="flight-option">
-                {line}
-              </div>
-            ))}
+          <div className="section-wrapper">
+            <h1>FLIGHT OPTIONS</h1>
+            <div className="flight-cards-grid">
+              {flightParts.map((flight, idx) => (
+                <FlightCard key={idx} flight={flight.trim()} />
+              ))}
+            </div>
           </div>
         );
+          
       case 'hotel':
+        let contentstringhotel = "";
+        section.content.map((line)=>{
+          contentstringhotel=contentstringhotel+line;
+        });
+        const hotelParts = contentstringhotel.split(/\d+\.\s/).filter(part => part.trim() !== "");
+
         return (
-          <div className="section hotel-section">
-            <h3>🏨 Hotel Options</h3>
-            {section.content.map((line, idx) => (
-              <div key={idx} className="hotel-option">
-                {line}
-              </div>
-            ))}
+          <div className="section-wrapper">
+            <h1>HOTEL OPTIONS</h1>
+            <div className="hotel-cards-grid">
+              {hotelParts.map((hotel, idx) => (
+                <HotelCard key={idx} hotel={hotel.trim()} />
+              ))}
+            </div>
           </div>
         );
+
+      case 'itinerary':
+        // Process itinerary content to group by days
+        const itineraryContent = section.content.join('\n');
+        const dayMatches = itineraryContent.match(/Day \d+.*?(?=Day \d+|$)/gs) || [];
+        
+        return (
+          <div className="section-wrapper">
+            <h1>YOUR ITINERARY</h1>
+            <ItineraryPDF itineraryData={itineraryContent} />
+            <div className="itinerary-cards-grid">
+              {dayMatches.map((dayContent, idx) => {
+                // Extract day number and content
+                const dayMatch = dayContent.match(/Day (\d+)/);
+                const dayNumber = dayMatch ? dayMatch[1] : idx + 1;
+                
+                // Split content into morning, afternoon, and evening
+                const morning = dayContent.match(/Morning:(.*?)(?=Afternoon:|Evening:|$)/s)?.[1]?.trim() || '';
+                const afternoon = dayContent.match(/Afternoon:(.*?)(?=Evening:|$)/s)?.[1]?.trim() || '';
+                const evening = dayContent.match(/Evening:(.*?)$/s)?.[1]?.trim() || '';
+
+                // Function to remove asterisks and clean up text
+                const cleanText = (text) => {
+                  return text
+                    .replace(/\*/g, '') // Remove asterisks
+                    .replace(/\n\s*\n/g, '\n') // Remove extra blank lines
+                    .trim();
+                };
+
+                return (
+                  <div key={idx} className="itinerary-card">
+                    <div className="itinerary-card-header">
+                      <h2>Day {dayNumber}</h2>
+                    </div>
+                    <div className="itinerary-card-content">
+                      {morning && (
+                        <div className="itinerary-section morning">
+                          <h3>🌅 Morning</h3>
+                          <p>{cleanText(morning)}</p>
+                        </div>
+                      )}
+                      {afternoon && (
+                        <div className="itinerary-section afternoon">
+                          <h3>☀️ Afternoon</h3>
+                          <p>{cleanText(afternoon)}</p>
+                        </div>
+                      )}
+                      {evening && (
+                        <div className="itinerary-section evening">
+                          <h3>🌙 Evening</h3>
+                          <p>{cleanText(evening)}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+
       default:
         return (
           <div className="section text-section">
@@ -171,11 +336,34 @@ const ChatWindow = () => {
   return (
     <div className="chat-container chat-gradient-bg">
       <div className="chat-header">
-        <h2>Travel Assistant</h2>
-        <p>Let's plan your perfect trip together!</p>
+        <div className="header-content">
+          <h2>Travel Assistant</h2>
+          <p>Let's plan your perfect trip together!</p>
+        </div>
+        <div className="user-section">
+          <span className="welcome-message">Welcome, {userName}! 👋</span>
+          <button className="logout-button" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
       </div>
-
       <div className="chat-messages">
+      {isHistoryLoading ? (
+          <div className="loading-history">
+            <div className="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <p>Loading your conversations...</p>
+          </div>
+        ) : (
+          messages.length === 0 && (
+            <div className="empty-history">
+              <p>No previous conversations found. Start chatting!</p>
+            </div>
+          )
+        )}
         {messages.map((message, index) => (
           <div key={index} className="message-wrapper">
             {renderMessage(message, index)}
