@@ -34,7 +34,7 @@ app.add_middleware(
     CORSMiddleware,
 
     allow_origins=["http://localhost:3000",  # For local development
-        "https://ai-travel-planning-chatbot.vercel.app"],  # Updated to match frontend port
+        "https://ai-travel-planning-chatbot-d2gh.vercel.app"],  # Updated to match frontend port
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
