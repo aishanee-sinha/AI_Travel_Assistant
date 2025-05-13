@@ -5,13 +5,17 @@ import uvicorn
 import sys
 import os
 import logging
-from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy import create_engine, Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, relationship
 from passlib.context import CryptContext
 from jose import jwt
 from datetime import datetime, timedelta
-from sample import chat_with_gemini
+from sample import chat_with_gemini, initialize_chat
+from fastapi.responses import StreamingResponse, JSONResponse
+import io
+import json
+from typing import List, Optional
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -21,8 +25,6 @@ logger = logging.getLogger(__name__)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
-
-from sample import chat_with_gemini, initialize_chat
 
 
 app = FastAPI()
@@ -56,7 +58,17 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    messages = relationship("ChatMessage", back_populates="user")
 
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    sender = Column(String, nullable=False)  # 'user' or 'bot'
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", back_populates="messages")
 
 Base.metadata.create_all(bind=engine)
 
@@ -90,7 +102,16 @@ def get_db():
         yield db
     finally:
         db.close()
-
+def get_current_user(token: str = Depends(lambda x: x), db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+        if email is None:
+            return None
+        user = db.query(User).filter(User.email == email).first()
+        return user
+    except:
+        return None
 
 # --- Pydantic models ---
 class SignupRequest(BaseModel):
@@ -103,6 +124,17 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+
+class ChatRequest(BaseModel):
+    message: str
+    token: Optional[str] = None
+
+
+class MessageResponse(BaseModel):
+    id: int
+    sender: str
+    content: str
+    timestamp: datetime
 
 # --- Auth endpoints ---
 @app.post("/api/signup")
@@ -118,7 +150,8 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     token = create_access_token({"sub": new_user.email})
-    return {"token": token}
+    logger.info(f"New user registered: {new_user.name}, {new_user.email}")
+    return {"token": token, "name": new_user.name}
 
 
 @app.post("/api/login")
@@ -127,24 +160,91 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(request.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token({"sub": user.email})
-    return {"token": token}
+    logger.info(f"User logged in: {user.name}, {user.email}")
+    return {"token": token, "name": user.name}
 
 
 # --- Chat endpoint (existing) ---
-class ChatRequest(BaseModel):
-    message: str
-
-
 @app.post("/api/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     try:
         logger.info(f"Received message: {request.message}")
+        user = None
+        
+        # Try to authenticate the user if token is provided
+        if request.token:
+            user = get_current_user(request.token, db)
+            
         response = chat_with_gemini(request.message)
         logger.info(f"Generated response: {response}")
-        return {"response": response}
+        
+        # Save the conversation if user is authenticated
+        if user and not isinstance(response, dict):
+            # Save user message
+            user_message = ChatMessage(
+                user_id=user.id,
+                sender="user",
+                content=request.message
+            )
+            db.add(user_message)
+            
+            # Save bot response
+            bot_message = ChatMessage(
+                user_id=user.id,
+                sender="bot",
+                content=response
+            )
+            db.add(bot_message)
+            db.commit()
+
+        # If the response is a PDF, stream it as a file
+        # if isinstance(response, dict) and response.get("type") == "pdf":
+        #     pdf_bytes = response["data"]
+        #     filename = response["filename"]
+        #     return StreamingResponse(
+        #         io.BytesIO(pdf_bytes),
+        #         media_type="application/pdf",
+        #         headers={"Content-Disposition": f"attachment; filename={filename}"}
+        #     )
+        # Otherwise, return as JSON
+        return JSONResponse({"response": response})
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat-history")
+async def get_chat_history(token: str, db: Session = Depends(get_db)):
+    user = get_current_user(token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    messages = db.query(ChatMessage).filter(ChatMessage.user_id == user.id).order_by(ChatMessage.timestamp).all()
+    
+    return {"messages": [
+        {
+            "id": message.id,
+            "sender": message.sender,
+            "content": message.content,
+            "timestamp": message.timestamp
+        } for message in messages
+    ]}
+
+
+# @app.post("/api/download_pdf")
+# async def download_pdf(request: Request):
+#     data = await request.json()
+#     itinerary = data.get("itinerary")
+#     destination = data.get("destination")
+#     duration = data.get("duration")
+#     if not itinerary or not destination or not duration:
+#         raise HTTPException(status_code=400, detail="Missing itinerary data")
+#     pdf_buffer = generate_itinerary_pdf(itinerary, destination, duration)
+#     filename = f"itinerary_{destination}.pdf"
+#     return StreamingResponse(
+#         io.BytesIO(pdf_buffer.getvalue()),
+#         media_type="application/pdf",
+#         headers={"Content-Disposition": f"attachment; filename={filename}"}
+#     )
 
 
 if __name__ == "__main__":

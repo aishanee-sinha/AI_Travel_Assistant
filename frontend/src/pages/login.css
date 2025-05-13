@@ -95,7 +95,7 @@
   }
   
   .login-footer a:hover {
-    color: #004a99;
+    color: hsl(211, 100%, 30%);
   }
   
   /* Responsive tweak */
