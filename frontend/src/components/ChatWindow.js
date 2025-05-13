@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './ChatWindow.css';
 import FlightCard from './FlightCard';
 import HotelCard from './HotelCard';
+import ItineraryPDF from './ItineraryPDF';
 
 const SECTION_ICONS = {
   itinerary: '🗓️',
@@ -158,6 +159,7 @@ const ChatWindow = () => {
         return (
           <div className="section-wrapper">
             <h1>YOUR ITINERARY</h1>
+            <ItineraryPDF itineraryData={itineraryContent} />
             <div className="itinerary-cards-grid">
               {dayMatches.map((dayContent, idx) => {
                 // Extract day number and content
