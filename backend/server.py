@@ -33,11 +33,12 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
 
-    allow_origins=["http://localhost:3000",  # For local development
-        "https://ai-travel-planning-ch-git-b1948c-chetana-muralidharans-projects.vercel.app",
-        "https://ai-travel-planning-chatbot-d2gh.vercel.app",
-        "https://ai-travel-planning-chatbot-d2gh-6o0mewogk.vercel.app",
-        "https://ai-travel-planning-ch-git-b1948c-chetana-muralidharans-projects.vercel.app"],  # Updated to match frontend port
+    #allow_origins=["http://localhost:3000",  # For local development
+     #   "https://ai-travel-planning-ch-git-b1948c-chetana-muralidharans-projects.vercel.app",
+      #  "https://ai-travel-planning-chatbot-d2gh.vercel.app",
+    # "https://ai-travel-planning-chatbot-d2gh-6o0mewogk.vercel.app",
+     #   "https://ai-travel-planning-ch-git-b1948c-chetana-muralidharans-projects.vercel.app"],  # Updated to match frontend port
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
