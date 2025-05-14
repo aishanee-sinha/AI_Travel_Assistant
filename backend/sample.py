@@ -87,7 +87,7 @@ def generate_itinerary(destination, duration, interests=""):
 def generate_itinerary_html(destination, duration, interests=""):
     prompt = (
         f"Create a detailed {duration}-day itinerary for {destination}. "
-        f"Break it down day by day. For each day, start with an emoji and a bolded title, e.g., 'Day 1: City Name'. "
+        f"Break it down day by day. For each day, start with a bolded title, e.g., 'Day 1: City Name'. "
         f"For each day, use bullet points for morning, afternoon, and evening activities. "
         f"Use clear section headers for each part of the day. "
         f"Format the entire itinerary as plain text with clear sections and bullet points. "
@@ -321,8 +321,6 @@ def reset_trip_context():
         "destination": "",
         "departure_date": "",
         "return_date": "",
-        "budget": "",
-        "accommodation": "",
         "interests": "",
         "duration": ""
     }
@@ -348,7 +346,7 @@ def parse_user_intent(user_input):
         "You are a travel planning assistant. Analyze this user message and return a JSON object with the following structure. "
         "IMPORTANT: Return ONLY the JSON object, no other text or explanation.\n"
         "{\n"
-        "  'intent': 'greeting' | 'reset' | 'provide_info' | 'question' | 'continue',\n"
+        "  'intent': 'greeting' | 'reset' | 'itinerary'|'hotel'| 'flight'| 'weather'\,\n"
         "  'is_greeting': boolean,\n"
         "  'is_reset': boolean,\n"
         "  'extracted_info': {\n"
@@ -357,9 +355,7 @@ def parse_user_intent(user_input):
         "    'departure_date': string | null,\n"
         "    'return_date': string | null,\n"
         "    'duration': string | null,\n"
-        "    'budget': string | null,\n"
         "    'interests': string | null,\n"
-        "    'accommodation': string | null\n"
         "  },\n"
         "  'missing_info': string[],\n"
         "  'next_question': string\n"
@@ -368,10 +364,12 @@ def parse_user_intent(user_input):
         "1. For dates, convert to YYYY-MM-DD format\n"
         "2. For intent detection:\n"
         "   - 'greeting': hello, hi, hey, etc.\n"
-        "   - 'reset': new trip, start over, reset, clear, etc.\n"
-        "   - 'provide_info': when user provides any trip details\n"
-        "   - 'question': when user asks about the trip\n"
-        "   - 'continue': when user wants to proceed with planning\n"
+        "   - 'reset': new trip,another trip, start over, reset, clear, etc.\n"
+        "   - 'itinerary': plan a trip, give me itinary/itinerary, i want to go to etc.\n"
+        "   - 'flight': give me flight options etc."
+        "   - 'hotels': give me hotel options etc.\n"
+        "   - 'weather': give me weather forecast, what will be the weather/temperature, will it be rainy? etc.\n"    
+        "   - 'general': if the question is not related to planning trip, flights, hotels, weather forecast, greeting or reset_trip"    
         "3. For missing_info, list only the required fields that are still missing\n"
         "4. For next_question, provide a natural follow-up question\n"
         "5. Maintain context from previous messages\n\n"
@@ -457,10 +455,19 @@ def parse_user_intent(user_input):
                 "extracted_info": {},
                 "missing_info": ["destination"],
                 "next_question": "Where would you like to go?"
-            }
+            }            
+
+def general_query(user_input):
+    prompt = (
+        "You are a travel planning assistant. Analyze this user message along with trip context")
+    response = chat.send_message(prompt)
+    return response
+        
+
 
 def chat_with_gemini(user_input):
     try:
+        response_text = ''
         # Parse user intent using Gemini
         parsed_intent = parse_user_intent(user_input)
         
@@ -481,8 +488,8 @@ def chat_with_gemini(user_input):
         
         print("\U0001F4E6 Current Trip Context:", trip_context)
         
-        # Stage 1: Check if we have destination and duration
-        if trip_context["destination"] and trip_context["duration"]:
+        # Stage 1: Itinerary generation
+        if "itinerary" in parsed_intent["intent"] and trip_context["destination"] and trip_context["duration"]:
             # Generate initial itinerary
             itinerary = generate_itinerary_html(
                 trip_context["destination"],
@@ -492,157 +499,93 @@ def chat_with_gemini(user_input):
             
             response_text = "Here's a general itinerary for your trip:\n\n"
             response_text += itinerary + "\n\n"
-            
-            # If we don't have dates and origin, ask for them
-            if not trip_context["departure_date"] or not trip_context["origin"]:
-                response_text += "Would you like to see flight and hotel options? Please provide your travel dates and origin city."
-                return response_text
-            
-            # Stage 2: If we have dates but no origin
-            if trip_context["departure_date"] and not trip_context["origin"]:
-                # Calculate return date if we have duration
-                if not trip_context["return_date"]:
-                    trip_context["return_date"] = calculate_return_date(
-                        trip_context["departure_date"],
-                        trip_context["duration"]
-                    )
-                
-                # Get hotel options
-                hotels = get_hotel_prices_with_links(
-                    trip_context["destination"],
-                    trip_context["departure_date"],
-                    trip_context["return_date"]
-                )
-                
-                # Get weather information
-                try:
-                    departure_weather = get_weather_climatology(
-                        trip_context["destination"],
-                        trip_context["departure_date"]
-                    )
-                    return_weather = get_weather_climatology(
-                        trip_context["destination"],
-                        trip_context["return_date"]
-                    )
-                    
-                    response_text = "Here's what I found for your trip:\n\n"
-                    response_text += "🌤️ Weather Forecast:\n\n"
-                    response_text += departure_weather + "\n"
-                    response_text += return_weather + "\n\n"
-                    
-                    if hotels:
-                        response_text += "🏨 Hotel Options:\n\n"
-                        for hotel in hotels:
-                            response_text += hotel + "\n"
-                    else:
-                        response_text += "❌ No hotels found for your dates.\n"
-                    
-                    response_text += "\nTo see flight options, please provide your origin city."
-                    return response_text
-                    
-                except Exception as e:
-                    print(f"Error fetching data: {str(e)}")
-                    response_text += "❌ Unable to fetch some data at the moment.\n"
-                    response_text += "To see flight options, please provide your origin city."
-                    return response_text
-            
-            # Stage 3: If we have all required information
-            if trip_context["departure_date"] and trip_context["origin"]:
-                # Calculate return date if we have duration
-                if not trip_context["return_date"]:
-                    trip_context["return_date"] = calculate_return_date(
-                        trip_context["departure_date"],
-                        trip_context["duration"]
-                    )
-                
-                # Get flight options
-                flights = get_flight_prices_with_links(
-                    trip_context["origin"],
-                    trip_context["destination"],
-                    trip_context["departure_date"]
-                )
-                
-                # Get hotel options
-                hotels = get_hotel_prices_with_links(
-                    trip_context["destination"],
-                    trip_context["departure_date"],
-                    trip_context["return_date"]
-                )
-                
-                # Get weather information
-                try:
-                    departure_weather = get_weather_climatology(
-                        trip_context["destination"],
-                        trip_context["departure_date"]
-                    )
-                    return_weather = get_weather_climatology(
-                        trip_context["destination"],
-                        trip_context["return_date"]
-                    )
-                    
-                    response_text = "Here's your complete travel plan:\n\n"
-                    itinerary = generate_itinerary_html(
-                            trip_context["destination"],
-                            trip_context["duration"],
-                            trip_context["interests"]
-                        )
-                    response_text = "Here's the itinerary for your trip:\n\n"
-                    response_text += itinerary + "\n\n"
-                    # Add weather information
-                    response_text += "🌤️ Weather Forecast:\n\n"
-                    response_text += departure_weather + "\n"
-                    response_text += return_weather + "\n\n"
-                    
-                    # Add flight options
-                    if flights:
-                        response_text += "✈️ Flight Options:\n\n"
-                        for flight in flights:
-                            response_text += flight + "\n"
-                        response_text += "\n"
-                    else:
-                        response_text += "❌ No direct flights found for your dates.\n\n"
-                    
-                    # Add hotel options
-                    if hotels:
-                        response_text += "🏨 Hotel Options:\n\n"
-                        for hotel in hotels:
-                            response_text += hotel + "\n"
-                        response_text += "\n"
-                    else:
-                        response_text += "❌ No hotels found for your dates.\n\n"
-                    
-                    # Stage 4: Ask about interests for revised itinerary
-                    if not trip_context.get("interests"):
-                        response_text += "Please let me know your interests and preferences and I can customize the itinerary accordingly."
-                    else:
-                        # Stage 5: Generate revised itinerary with interests
-                        revised_itinerary = generate_itinerary_html(
-                            trip_context["destination"],
-                            trip_context["duration"],
-                            trip_context["interests"]
-                        )
-                        response_text += "Here's your revised itinerary based on your interests:\n\n"
-                        response_text += revised_itinerary
-                    
-                    return response_text
-                    
-                except Exception as e:
-                    print(f"Error fetching data: {str(e)}")
-                    response_text += "❌ Unable to fetch some data at the moment.\n"
-                    return response_text
+            return response_text
+        elif "itinerary" in parsed_intent["intent"] and not trip_context["destination"]:
+            response_text = "Where would you like to go?"
+            return response_text
+        elif "itinerary" in parsed_intent["intent"] and not trip_context["duration"]:
+            response_text = "How many days would you like to stay in " + trip_context["destination"] + "?"
+            return response_text
+        # else:
+        #     response_text = "I need more information to help plan your trip. Please provide your destination and duration of stay."
+        #     return response_text
+        # Flight options
+        if "flight" in parsed_intent["intent"] and trip_context["departure_date"] and trip_context["origin"]:
+            response_text += "Here are your flight options"
+            flights = get_flight_prices_with_links(
+                   trip_context["origin"],
+                   trip_context["destination"],
+                   trip_context["departure_date"]
+                )            
+            if flights:
+                response_text += "✈️ Flight Options:\n\n"
+                for flight in flights:
+                    response_text += flight + "\n"
+                response_text += "\n"
+            else:
+                response_text += "❌ No direct flights found for your dates.\n\n"
+            return response_text
         
-        # If we don't have destination or duration, ask for them
-        if not trip_context["destination"]:
+        elif "flight" in parsed_intent["intent"] and not trip_context["departure_date"] and not trip_context["origin"]:
+            return "Please share your departure date and origin city"
+        elif "flight" in parsed_intent["intent"] and not trip_context["departure_date"]:
+            return "Please share your departure date"
+        elif "flight" in parsed_intent["intent"] and not trip_context["origin"]:
+            return "Please share your origin city"
+        # else:
+        #     response_text = "I need more information to help plan your trip. Please provide your departure date and origin city."
+        #     return response_text
+            # Stage 2: Hotel options
+        if "hotel" in parsed_intent["intent"] and trip_context["destination"] and trip_context["departure_date"] and trip_context["duration"]:
+            # Calculate return date if we have duration
+            if not trip_context["return_date"]:
+                trip_context["return_date"] = calculate_return_date(
+                trip_context["departure_date"],
+                trip_context["duration"]
+                )
+                
+            # Get hotel options
+            hotels = get_hotel_prices_with_links(
+            trip_context["destination"],
+            trip_context["departure_date"],
+            trip_context["return_date"]
+            )
+            response_text += "🏨 Hotel Options:\n\n"
+                
+            if hotels:
+                for hotel in hotels:
+                    response_text += hotel + " \n"
+            else:
+                response_text += "❌ No hotels found for your dates.\n"
+            return response_text
+        elif "hotel" in parsed_intent["intent"] and not trip_context['departure_date'] and not trip_context['return_date']:
+            return "Please share your departure date and return date"
+        elif "hotel" in parsed_intent["intent"] and not trip_context['return_date']:
+            return "Please share your return date"
+        elif "hotel" in parsed_intent["intent"]:
             return "Where would you like to go?"
-        if not trip_context["duration"]:
-            return f"How many days would you like to stay in {trip_context['destination']}?"
+
+        if "weather" in parsed_intent["intent"] and trip_context["destination"] and trip_context["departure_date"]:
+            response_text += "🌤️ Weather Forecast:\n\n"
+            departure_weather = get_weather_climatology(
+                trip_context["destination"],
+                trip_context["departure_date"]
+            )
+            response_text += departure_weather + "\n"
+            return response_text
+        elif "weather" in parsed_intent["intent"] and not trip_context["departure_date"]:
+            return("Please share your departure date")
+        elif "weather" in parsed_intent["intent"]:
+            return("Please share your destination")
         
-        return "I need more information to help plan your trip. Please provide your destination and duration of stay."
+        if "general" in parsed_intent["intent"]:
+            return general_query(user_input)
+        
+        return response_text
         
     except Exception as e:
         print(f"Error in chat_with_gemini: {str(e)}")
-        return f"Sorry, I encountered an error: {str(e)}. Please try again with your travel details."
-
+        return "Sorry, I encountered an error. Please try again."
 def main():
     print("\U0001F972 Travel Itinerary Chatbot with Memory\nType 'exit' to end the conversation.\n")
     initialize_chat()
