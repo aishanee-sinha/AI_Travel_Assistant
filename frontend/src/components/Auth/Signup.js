@@ -44,6 +44,7 @@ const Signup = () => {
 
             if (response.ok) {
                 localStorage.setItem('token', data.token);
+                localStorage.setItem('userName', formData.name);
                 navigate('/chat');
             } else {
                 setError(data.message || 'Signup failed');
